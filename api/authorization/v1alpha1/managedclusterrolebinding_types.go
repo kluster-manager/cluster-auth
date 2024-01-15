@@ -63,6 +63,9 @@ type ClusterRoleRef struct {
 	Kind string `json:"kind"`
 	// Name is the name of resource being referenced
 	Name string `json:"name"`
+	// Namespaces are the name of the namespaces for Roles
+	// +optional
+	Namespaces []string `json:"namespaces"`
 }
 
 //+kubebuilder:object:root=true
