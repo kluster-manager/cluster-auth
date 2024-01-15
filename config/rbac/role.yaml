@@ -1,0 +1,136 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - authentication.k8s.appscode.com
+  resources:
+  - groups
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - authentication.k8s.appscode.com
+  resources:
+  - groups/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - authentication.k8s.appscode.com
+  resources:
+  - groups/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - authentication.k8s.appscode.com
+  resources:
+  - users
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - authentication.k8s.appscode.com
+  resources:
+  - users/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - authentication.k8s.appscode.com
+  resources:
+  - users/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - authorization.k8s.appscode.com
+  resources:
+  - managedclusterrolebindings
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - authorization.k8s.appscode.com
+  resources:
+  - managedclusterrolebindings/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - authorization.k8s.appscode.com
+  resources:
+  - managedclusterrolebindings/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - authorization.k8s.appscode.com
+  resources:
+  - managedclusterroles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - authorization.k8s.appscode.com
+  resources:
+  - managedclusterroles/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - authorization.k8s.appscode.com
+  resources:
+  - managedclusterroles/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - authorization.k8s.appscode.com
+  resources:
+  - managedclustersetrolebindings
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - authorization.k8s.appscode.com
+  resources:
+  - managedclustersetrolebindings/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - authorization.k8s.appscode.com
+  resources:
+  - managedclustersetrolebindings/status
+  verbs:
+  - get
+  - patch
+  - update

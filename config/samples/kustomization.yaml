@@ -1,0 +1,8 @@
+## Append samples of your project ##
+resources:
+- authentication_v1alpha1_user.yaml
+- authentication_v1alpha1_group.yaml
+- authorization_v1alpha1_managedclusterrole.yaml
+- authorization_v1alpha1_managedclusterrolebinding.yaml
+- authorization_v1alpha1_managedclustersetrolebinding.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples

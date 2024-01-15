@@ -1,0 +1,27 @@
+# permissions for end users to view managedclusterroles.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: managedclusterrole-viewer-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: cluster-auth-manager
+    app.kubernetes.io/part-of: cluster-auth-manager
+    app.kubernetes.io/managed-by: kustomize
+  name: managedclusterrole-viewer-role
+rules:
+- apiGroups:
+  - authorization.k8s.appscode.com
+  resources:
+  - managedclusterroles
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - authorization.k8s.appscode.com
+  resources:
+  - managedclusterroles/status
+  verbs:
+  - get
