@@ -48,6 +48,53 @@ func setupPermission(nativeClient kubernetes.Interface) agent.PermissionConfigFu
 		namespace := cluster.Name
 		agentUser := agent.DefaultUser(cluster.Name, addon.Name, common.AgentName)
 
+		cr := &rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: addon.Name,
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion:         "addon.open-cluster-management.io/v1alpha1",
+						Kind:               "ManagedClusterAddOn",
+						UID:                addon.UID,
+						Name:               addon.Name,
+						BlockOwnerDeletion: ptr.To(true),
+					},
+				},
+			},
+			Rules: []rbacv1.PolicyRule{
+				{
+					APIGroups: []string{"*"},
+					Verbs:     []string{"*"},
+					Resources: []string{"*"},
+				},
+			},
+		}
+
+		crb := &rbacv1.ClusterRoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: addon.Name,
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion:         "addon.open-cluster-management.io/v1alpha1",
+						Kind:               "ManagedClusterAddOn",
+						UID:                addon.UID,
+						Name:               addon.Name,
+						BlockOwnerDeletion: ptr.To(true),
+					},
+				},
+			},
+			RoleRef: rbacv1.RoleRef{
+				Kind: "ClusterRole",
+				Name: addon.Name,
+			},
+			Subjects: []rbacv1.Subject{
+				{
+					Kind: rbacv1.UserKind,
+					Name: agentUser,
+				},
+			},
+		}
+
 		role := &rbacv1.Role{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      addon.Name,
@@ -74,7 +121,7 @@ func setupPermission(nativeClient kubernetes.Interface) agent.PermissionConfigFu
 					Resources: []string{"managedclusterrolebindings"},
 				},
 				{
-					APIGroups: []string{"authentication.open-cluster-management.io"},
+					APIGroups: []string{"*"},
 					Verbs:     []string{"*"},
 					Resources: []string{"*"},
 				},
@@ -121,6 +168,28 @@ func setupPermission(nativeClient kubernetes.Interface) agent.PermissionConfigFu
 		switch {
 		case errors.IsNotFound(err):
 			_, createErr := nativeClient.RbacV1().RoleBindings(cluster.Name).Create(context.TODO(), roleBinding, metav1.CreateOptions{})
+			if createErr != nil {
+				return createErr
+			}
+		case err != nil:
+			return err
+		}
+
+		_, err = nativeClient.RbacV1().ClusterRoles().Get(context.TODO(), cr.Name, metav1.GetOptions{})
+		switch {
+		case errors.IsNotFound(err):
+			_, createErr := nativeClient.RbacV1().ClusterRoles().Create(context.TODO(), cr, metav1.CreateOptions{})
+			if createErr != nil {
+				return createErr
+			}
+		case err != nil:
+			return err
+		}
+
+		_, err = nativeClient.RbacV1().ClusterRoleBindings().Get(context.TODO(), crb.Name, metav1.GetOptions{})
+		switch {
+		case errors.IsNotFound(err):
+			_, createErr := nativeClient.RbacV1().ClusterRoleBindings().Create(context.TODO(), crb, metav1.CreateOptions{})
 			if createErr != nil {
 				return createErr
 			}

@@ -21,18 +21,19 @@ import (
 	"flag"
 	"github.com/kluster-manager/cluster-auth/pkg/addon/manager"
 	"github.com/kluster-manager/cluster-auth/pkg/common"
-	helper_controller "github.com/kluster-manager/cluster-auth/pkg/controller/helper-controller"
 	rbac "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
+	cg "kmodules.xyz/client-go/client"
 	"open-cluster-management.io/addon-framework/pkg/addonfactory"
 	"open-cluster-management.io/addon-framework/pkg/agent"
 	"open-cluster-management.io/addon-framework/pkg/utils"
 	v1 "open-cluster-management.io/api/cluster/v1"
 	mSA "open-cluster-management.io/managed-serviceaccount/apis/authentication/v1alpha1"
 	"os"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
-
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -41,7 +42,6 @@ import (
 	authnv1alpha1 "github.com/kluster-manager/cluster-auth/api/authentication/v1alpha1"
 	authorizationv1alpha1 "github.com/kluster-manager/cluster-auth/api/authorization/v1alpha1"
 	authzv1alpha1 "github.com/kluster-manager/cluster-auth/api/authorization/v1alpha1"
-	authenticationcontroller "github.com/kluster-manager/cluster-auth/pkg/controller/authentication"
 	authorizationcontroller "github.com/kluster-manager/cluster-auth/pkg/controller/authorization"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -231,20 +231,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&authenticationcontroller.UserReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "User")
-		os.Exit(1)
-	}
-	if err = (&authenticationcontroller.GroupReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Group")
-		os.Exit(1)
-	}
 	if err = (&authorizationcontroller.ManagedClusterRoleReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
@@ -265,13 +251,6 @@ func main() {
 		ClusterClient: *clusterClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ManagedClusterSetRoleBinding")
-		os.Exit(1)
-	}
-	if err = (&helper_controller.ManagedClusterReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ManagedCluster")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder
@@ -299,4 +278,29 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+
+	// create clusterRole with "clusterGateway/proxy" rules
+	gatewayClusterRole := &rbac.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster-gateway-permission",
+		},
+		Rules: []rbac.PolicyRule{
+			{
+				APIGroups: []string{"cluster.core.oam.dev"},
+				Resources: []string{"clustergateways/health", "clustergateways/proxy"},
+				Verbs:     []string{"*"},
+			},
+		},
+	}
+
+	_, err = cg.CreateOrPatch(context.Background(), mgr.GetClient(), gatewayClusterRole, func(obj client.Object, createOp bool) client.Object {
+		in := obj.(*rbac.ClusterRole)
+		in.Rules = gatewayClusterRole.Rules
+		return in
+	})
+	if err != nil {
+		setupLog.Error(err, "problem creating cluster-gateway-permission")
+		os.Exit(1)
+	}
+
 }

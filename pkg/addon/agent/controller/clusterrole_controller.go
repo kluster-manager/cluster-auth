@@ -18,15 +18,12 @@ package controller
 
 import (
 	"context"
-	authorizationv1alpha1 "github.com/kluster-manager/cluster-auth/api/authorization/v1alpha1"
 	"github.com/kluster-manager/cluster-auth/pkg/util"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"open-cluster-management.io/managed-serviceaccount/apis/authentication/v1alpha1"
+	ocmkl "open-cluster-management.io/api/operator/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -34,13 +31,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	cg "kmodules.xyz/client-go/client"
-	ocmkl "open-cluster-management.io/api/operator/v1"
 )
 
 const ManagedServiceAccountNamespace = "open-cluster-management-managed-serviceaccount"
 
 // ManagedClusterRoleBindingReconciler reconciles a ManagedClusterRoleBinding object
-type ClusterRoleReconciler struct {
+type ClusterRoleBindingReconciler struct {
 	HubClient         client.Client
 	HubNativeClient   kubernetes.Interface
 	SpokeNativeClient kubernetes.Interface
@@ -62,22 +58,23 @@ type ClusterRoleReconciler struct {
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
-func (r *ClusterRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *ClusterRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-	logger.Info("Start reconciling")
+	logger.Info("Start reconciling------------------->")
 
 	c, err := util.GetKubeClient(r.SpokeClientConfig)
 	if err != nil {
 		return reconcile.Result{}, nil
 	}
 
-	cr := &rbacv1.ClusterRole{}
-	if err = c.Get(ctx, req.NamespacedName, cr); err != nil {
+	cr := &rbacv1.ClusterRoleBinding{}
+	err = c.Get(ctx, req.NamespacedName, cr)
+	if err != nil {
 		return reconcile.Result{}, err
 	}
 
-	msaName, ok := cr.Labels["authentication.k8s.appscode.com/managed-serviceaccount"]
-	if !ok {
+	userName, found := cr.Labels["authentication.k8s.appscode.com/username"]
+	if !found {
 		return reconcile.Result{}, err
 	}
 
@@ -88,67 +85,67 @@ func (r *ClusterRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return reconcile.Result{}, err
 	}
 
-	// get serviceaccount
-	managedSA := &v1alpha1.ManagedServiceAccount{}
-	if err = r.HubClient.Get(context.Background(), types.NamespacedName{Name: msaName, Namespace: kl.Spec.ClusterName}, managedSA); err != nil {
-		return reconcile.Result{}, err
-	}
-
-	usrName, ok := cr.Labels["authentication.k8s.appscode.com/username"]
-	if !ok {
-		return reconcile.Result{}, err
-	}
-
-	userSub := []rbacv1.Subject{
-		{
-			APIGroup: "",
-			Kind:     "User",
-			Name:     usrName,
+	// impersonate clusterRole
+	clusterRole := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "impersonate-" + userName,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups:     []string{""},
+				Resources:     []string{"users"},
+				Verbs:         []string{"impersonate"},
+				ResourceNames: []string{userName},
+			},
 		},
 	}
 
-	managedCRBList := &authorizationv1alpha1.ManagedClusterRoleBindingList{}
-	err = r.HubClient.List(ctx, managedCRBList, &client.ListOptions{
-		Namespace: kl.Spec.ClusterName,
-		LabelSelector: labels.SelectorFromSet(map[string]string{
-			"authentication.k8s.appscode.com/username": usrName,
-		}),
+	_, err = cg.CreateOrPatch(context.Background(), c, clusterRole, func(obj client.Object, createOp bool) client.Object {
+		in := obj.(*rbacv1.ClusterRole)
+		in.Rules = clusterRole.Rules
+		return in
 	})
 	if err != nil {
 		return reconcile.Result{}, err
 	}
 
-	for _, managedCRB := range managedCRBList.Items {
-		// this clusterRoleBinding will give permission to the user
-		crb := &rbacv1.ClusterRoleBinding{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: managedCRB.Name + "-" + managedCRB.RoleRef.Name,
+	// this clusterRoleBinding will give permission to the user
+	crb := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "impersonate-" + userName + "-rolebinding",
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				APIGroup:  "",
+				Kind:      "ServiceAccount",
+				Name:      "cluster-gateway",
+				Namespace: "open-cluster-management-managed-serviceaccount",
 			},
-			Subjects: userSub, // user reference
-			RoleRef: rbacv1.RoleRef{
-				APIGroup: managedCRB.RoleRef.APIGroup,
-				Kind:     managedCRB.RoleRef.Kind,
-				Name:     managedCRB.RoleRef.Name,
-			},
-		}
-
-		_, err = cg.CreateOrPatch(context.Background(), c, crb, func(obj client.Object, createOp bool) client.Object {
-			in := obj.(*rbacv1.ClusterRoleBinding)
-			in.Subjects = crb.Subjects
-			in.RoleRef = crb.RoleRef
-			return in
-		})
-		if err != nil {
-			return reconcile.Result{}, err
-		}
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name:     "impersonate-" + userName,
+		},
 	}
+
+	_, err = cg.CreateOrPatch(context.Background(), c, crb, func(obj client.Object, createOp bool) client.Object {
+		in := obj.(*rbacv1.ClusterRoleBinding)
+		in.Subjects = crb.Subjects
+		in.RoleRef = crb.RoleRef
+		return in
+	})
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
 	return reconcile.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ClusterRoleReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ClusterRoleBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&rbacv1.ClusterRole{}).Watches(&rbacv1.ClusterRole{}, &handler.EnqueueRequestForObject{}).
+		For(&rbacv1.ClusterRoleBinding{}).Watches(&rbacv1.ClusterRoleBinding{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 

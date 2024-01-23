@@ -29,11 +29,11 @@ import (
 	"k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/klog/v2"
 	cg "kmodules.xyz/client-go/client"
+	ocmkl "open-cluster-management.io/api/operator/v1"
 	mSA "open-cluster-management.io/managed-serviceaccount/apis/authentication/v1alpha1"
 	"os"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -189,13 +189,20 @@ func main() {
 		klog.Fatal("")
 	}
 
-	if err = (&controller.ClusterRoleReconciler{
+	// get klusterlet
+	kl := ocmkl.Klusterlet{}
+	err = sc.Get(context.Background(), client.ObjectKey{Name: "klusterlet"}, &kl)
+	if err != nil {
+		klog.Fatal("")
+	}
+
+	if err = (&controller.ClusterRoleBindingReconciler{
 		HubClient:         c,
 		HubNativeClient:   hubNativeClient,
 		SpokeNamespace:    spokeNamespace,
 		SpokeClientConfig: spokeCfg,
 		SpokeNativeClient: spokeNativeClient,
-		ClusterName:       clusterName,
+		ClusterName:       kl.Spec.ClusterName,
 	}).SetupWithManager(mgr); err != nil {
 		klog.Fatalf("unable to create controller %v", "ManagedServiceAccount")
 	}

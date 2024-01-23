@@ -21,6 +21,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	authorizationv1alpha1 "github.com/kluster-manager/cluster-auth/api/authorization/v1alpha1"
@@ -46,6 +48,17 @@ type ManagedClusterRoleReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
 func (r *ManagedClusterRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+	logger.Info("Start reconciling")
+
+	managedClusterRole := &authorizationv1alpha1.ManagedClusterRole{}
+	if err := r.Client.Get(ctx, req.NamespacedName, managedClusterRole); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	if err := createClusterRoleAndClusterRoleBindingToImpersonate(r.Client, ctx, managedClusterRole); err != nil {
+		return reconcile.Result{}, err
+	}
 
 	return reconcile.Result{}, nil
 }
@@ -53,6 +66,6 @@ func (r *ManagedClusterRoleReconciler) Reconcile(ctx context.Context, req ctrl.R
 // SetupWithManager sets up the controller with the Manager.
 func (r *ManagedClusterRoleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&authorizationv1alpha1.ManagedClusterRole{}).
+		For(&authorizationv1alpha1.ManagedClusterRole{}).Watches(&authorizationv1alpha1.ManagedClusterRole{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
