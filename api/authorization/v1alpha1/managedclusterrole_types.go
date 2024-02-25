@@ -23,7 +23,7 @@ import (
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
-//+kubebuilder:resource:scope=Cluster
+//+kubebuilder:resource:scope=Namespaced
 
 // ManagedClusterRole is the Schema for the managedclusterroles API
 type ManagedClusterRole struct {
