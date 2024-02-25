@@ -24,7 +24,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	clusterclientset "open-cluster-management.io/api/client/cluster/clientset/versioned"
-	clusterapiv1beta2 "open-cluster-management.io/api/cluster/v1beta2"
+	clustersdkv1beta2 "open-cluster-management.io/sdk-go/pkg/apis/cluster/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -67,7 +67,7 @@ func (r *ManagedClusterSetRoleBindingReconciler) Reconcile(ctx context.Context, 
 		return reconcile.Result{}, err
 	}
 
-	sel, err := clusterapiv1beta2.BuildClusterSelector(managedClusterSet)
+	sel, err := clustersdkv1beta2.BuildClusterSelector(managedClusterSet)
 	clusters, err := r.ClusterClient.ClusterV1().ManagedClusters().List(ctx, metav1.ListOptions{LabelSelector: sel.String()})
 	if err != nil {
 		return reconcile.Result{}, err

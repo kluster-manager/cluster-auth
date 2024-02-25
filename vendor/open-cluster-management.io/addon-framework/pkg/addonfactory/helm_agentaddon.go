@@ -154,20 +154,7 @@ func (a *HelmAgentAddon) renderManifests(
 					}
 					return nil, err
 				}
-
-				//if agentInstallNamespace != "" {
-				//	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(object)
-				//	if err != nil {
-				//		return nil, err
-				//	}
-				//	err = unstructured.SetNestedField(content, agentInstallNamespace, "metadata", "namespace")
-				//	if err != nil {
-				//		return nil, err
-				//	}
-				//	objects = append(objects, &unstructured.Unstructured{Object: content})
-				//} else {
 				objects = append(objects, object)
-				//}
 			}
 		}
 
@@ -197,7 +184,7 @@ func (a *HelmAgentAddon) getValues(
 
 	defaultValues, err := a.getDefaultValues(cluster, addon)
 	if err != nil {
-		klog.Error("failed to get defaultValue. err:%v", err)
+		klog.Errorf("failed to get defaultValue. err:%v", err)
 		return nil, err
 	}
 	overrideValues = MergeValues(overrideValues, defaultValues)
@@ -217,7 +204,7 @@ func (a *HelmAgentAddon) getValues(
 
 	builtinValues, err := a.getBuiltinValues(cluster, addon)
 	if err != nil {
-		klog.Error("failed to get builtinValue. err:%v", err)
+		klog.Errorf("failed to get builtinValue. err:%v", err)
 		return nil, err
 	}
 
@@ -259,7 +246,7 @@ func (a *HelmAgentAddon) getBuiltinValues(
 
 	helmBuiltinValues, err := JsonStructToValues(builtinValues)
 	if err != nil {
-		klog.Error("failed to convert builtinValues to values %v.err:%v", builtinValues, err)
+		klog.Errorf("failed to convert builtinValues to values %v.err:%v", builtinValues, err)
 		return nil, err
 	}
 	return helmBuiltinValues, nil
@@ -283,7 +270,7 @@ func (a *HelmAgentAddon) getDefaultValues(
 
 	helmDefaultValues, err := JsonStructToValues(defaultValues)
 	if err != nil {
-		klog.Error("failed to convert defaultValues to values %v.err:%v", defaultValues, err)
+		klog.Errorf("failed to convert defaultValues to values %v.err:%v", defaultValues, err)
 		return nil, err
 	}
 	return helmDefaultValues, nil
