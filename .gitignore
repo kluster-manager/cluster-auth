@@ -1,12 +1,11 @@
-
 # Binaries for programs and plugins
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-bin/*
-Dockerfile.cross
+bin
+testbin/*
 
 # Test binary, build with `go test -c`
 *.test
@@ -20,8 +19,9 @@ Dockerfile.cross
 
 # editor and IDE paraphernalia
 .idea
-.vscode
 *.swp
 *.swo
 *~
-.go
+/.go
+/bin
+/.config

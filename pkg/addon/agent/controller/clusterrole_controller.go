@@ -1,5 +1,5 @@
 /*
-Copyright 2024.
+Copyright AppsCode Inc. and Contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,19 +18,20 @@ package controller
 
 import (
 	"context"
+
 	"github.com/kluster-manager/cluster-auth/pkg/util"
+
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	cg "kmodules.xyz/client-go/client"
 	ocmkl "open-cluster-management.io/api/operator/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	cg "kmodules.xyz/client-go/client"
 )
 
 const ManagedServiceAccountNamespace = "open-cluster-management-managed-serviceaccount"
