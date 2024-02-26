@@ -1,5 +1,5 @@
 /*
-Copyright 2024.
+Copyright AppsCode Inc. and Contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,28 +19,28 @@ package authorization
 import (
 	"context"
 	errors2 "errors"
-	authenticationv1alpha1 "github.com/kluster-manager/cluster-auth/api/authentication/v1alpha1"
+	"time"
+
+	authenticationv1alpha1 "github.com/kluster-manager/cluster-auth/apis/authentication/v1alpha1"
+	authorizationv1alpha1 "github.com/kluster-manager/cluster-auth/apis/authorization/v1alpha1"
+
 	"gomodules.xyz/oneliners"
 	v1 "k8s.io/api/core/v1"
 	rbac "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
+	cg "kmodules.xyz/client-go/client"
 	"kmodules.xyz/client-go/tools/clientcmd"
 	workv1 "open-cluster-management.io/api/work/v1"
 	mSA "open-cluster-management.io/managed-serviceaccount/apis/authentication/v1alpha1"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"time"
-
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	authorizationv1alpha1 "github.com/kluster-manager/cluster-auth/api/authorization/v1alpha1"
-	cg "kmodules.xyz/client-go/client"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const ClusterAuthNamespace = "cluster-auth"
@@ -64,7 +64,6 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 	ns := managedCRB.GetNamespace()
 	if err = createManagedServiceAccount(ctx, ns, r.Client, managedCRB); err != nil {
 		return reconcile.Result{}, err
-
 	}
 
 	// create a service account for user
@@ -141,7 +140,6 @@ func createClusterRoleBindingForUser(ctx context.Context, c client.Client, manag
 		in.RoleRef = crb.RoleRef
 		return in
 	})
-
 	if err != nil {
 		return err
 	}

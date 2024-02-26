@@ -1,5 +1,5 @@
 /*
-Copyright 2024.
+Copyright AppsCode Inc. and Contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,18 +18,18 @@ package authorization
 
 import (
 	"context"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	cg "kmodules.xyz/client-go/client"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	authorizationv1alpha1 "github.com/kluster-manager/cluster-auth/apis/authorization/v1alpha1"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	cg "kmodules.xyz/client-go/client"
 	clusterclientset "open-cluster-management.io/api/client/cluster/clientset/versioned"
 	clustersdkv1beta2 "open-cluster-management.io/sdk-go/pkg/apis/cluster/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	authorizationv1alpha1 "github.com/kluster-manager/cluster-auth/api/authorization/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 // ManagedClusterSetRoleBindingReconciler reconciles a ManagedClusterSetRoleBinding object
