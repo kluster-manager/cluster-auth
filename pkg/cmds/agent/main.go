@@ -32,6 +32,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/klog/v2"
+	ocmoperator "open-cluster-management.io/api/operator/v1"
 	managedsaapi "open-cluster-management.io/managed-serviceaccount/apis/authentication/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -51,6 +52,7 @@ func init() {
 	utilruntime.Must(authenticationv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(authorizationv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(managedsaapi.AddToScheme(scheme))
+	utilruntime.Must(ocmoperator.Install(scheme))
 }
 
 func NewCmdAgent() *cobra.Command {
