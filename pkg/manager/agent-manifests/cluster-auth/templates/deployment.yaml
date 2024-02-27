@@ -48,7 +48,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-      {{- if .Values.apiserver.healthcheck.enabled }}
+      {{- if .Values.apiServer.healthcheck.enabled }}
         readinessProbe:
           httpGet:
             path: /healthz

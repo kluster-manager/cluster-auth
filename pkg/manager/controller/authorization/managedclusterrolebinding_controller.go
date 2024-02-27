@@ -277,10 +277,17 @@ func createManagedClusterRole(ctx context.Context, c client.Client, ns string, m
 		},
 	}
 
-	_, err := cu.CreateOrPatch(context.Background(), c, managedCR, func(obj client.Object, createOp bool) client.Object {
-		return managedCR
-	})
-	if err != nil {
+	err := c.Get(ctx, types.NamespacedName{Namespace: managedCR.Namespace, Name: managedCR.Name}, managedCR)
+	if errors.IsNotFound(err) {
+		_, err := cu.CreateOrPatch(context.Background(), c, managedCR, func(obj client.Object, createOp bool) client.Object {
+			in := obj.(*authorizationv1alpha1.ManagedClusterRole)
+			in = managedCR
+			return in
+		})
+		if err != nil {
+			return err
+		}
+	} else {
 		return err
 	}
 
