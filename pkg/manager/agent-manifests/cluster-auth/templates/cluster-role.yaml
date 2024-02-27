@@ -25,4 +25,4 @@ rules:
   - operator.open-cluster-management.io
   resources:
   - klusterlets
-  verbs: ["get"]
+  verbs: ["get", "list", "watch"]
