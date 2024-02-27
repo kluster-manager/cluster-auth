@@ -75,3 +75,6 @@ monitoring:
     # Prometheus crd will select ServiceMonitor using these labels.
     # Only usable when monitoring agent is `prometheus.io/operator`.
     labels: {}
+apiServer:
+  healthcheck:
+    enabled: true

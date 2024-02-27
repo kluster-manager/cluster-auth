@@ -110,6 +110,7 @@ func NewCmdManager() *cobra.Command {
 			}
 
 			agentAddOn, err := addonfactory.NewAgentAddonFactory(common.AddonName, manager.FS, common.AgentManifestsDir).
+				WithScheme(scheme).
 				WithConfigGVRs(utils.AddOnDeploymentConfigGVR).
 				WithGetValuesFuncs(
 					manager.GetDefaultValues(registryFQDN),
