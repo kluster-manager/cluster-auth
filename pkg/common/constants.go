@@ -18,6 +18,7 @@ package common
 
 const (
 	AddonName                  = "cluster-auth"
-	AgentName                  = "agent"
-	AddonAgentInstallNamespace = AddonName
+	AgentName                  = "cluster-auth"
+	AddonAgentInstallNamespace = "open-cluster-management-" + AddonName
+	AgentManifestsDir          = "agent-manifests/" + AddonName
 )

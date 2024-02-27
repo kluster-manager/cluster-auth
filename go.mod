@@ -5,16 +5,15 @@ go 1.22.0
 replace open-cluster-management.io/addon-framework => github.com/kluster-manager/addon-framework v0.9.1-0.20240225065513-dbdc1604459c
 
 require (
+	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.71.2
 	github.com/spf13/cobra v1.8.0
 	go.bytebuilders.dev/license-verifier v0.14.0
 	gomodules.xyz/logs v0.0.7
-	gomodules.xyz/oneliners v0.0.1
 	gomodules.xyz/x v0.0.16
 	k8s.io/api v0.29.1
 	k8s.io/apimachinery v0.29.1
 	k8s.io/client-go v0.29.1
 	k8s.io/klog/v2 v2.110.1
-	k8s.io/utils v0.0.0-20240102154912-e7106e64919e
 	kmodules.xyz/client-go v0.29.10
 	open-cluster-management.io/addon-framework v0.9.0
 	open-cluster-management.io/api v0.13.0
@@ -81,7 +80,6 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_golang v1.18.0 // indirect
 	github.com/prometheus/client_model v0.5.0 // indirect
 	github.com/prometheus/common v0.45.0 // indirect
@@ -130,6 +128,7 @@ require (
 	k8s.io/cli-runtime v0.29.0 // indirect
 	k8s.io/component-base v0.29.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20231129212854-f0671cc7e66a // indirect
+	k8s.io/utils v0.0.0-20240102154912-e7106e64919e // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/kustomize/api v0.13.5-0.20230601165947-6ce0bf390ce3 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.14.3-0.20230601165947-6ce0bf390ce3 // indirect

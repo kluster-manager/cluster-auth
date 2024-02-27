@@ -1,0 +1,3 @@
+To verify that cluster-auth operator has started, run:
+
+  kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "cluster-auth.name" . }},app.kubernetes.io/instance={{ .Release.Name }}"

@@ -55,7 +55,7 @@ endif
 ### These variables should not need tweaking.
 ###
 
-SRC_PKGS := apis hack pkg # directories which hold app source excluding tests (not vendored)
+SRC_PKGS := apis cmd crds hack pkg # directories which hold app source excluding tests (not vendored)
 SRC_DIRS := $(SRC_PKGS) # directories which hold app source (not vendored)
 
 DOCKER_PLATFORMS := linux/amd64 linux/arm64
@@ -408,7 +408,7 @@ lint: $(BUILD_DIRS)
 $(BUILD_DIRS):
 	@mkdir -p $@
 
-KUBE_NAMESPACE    ?= kubeops
+KUBE_NAMESPACE    ?= open-cluster-management-cluster-auth
 REGISTRY_SECRET   ?=
 IMAGE_PULL_POLICY	?= IfNotPresent
 

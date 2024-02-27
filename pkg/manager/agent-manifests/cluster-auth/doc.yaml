@@ -1,0 +1,18 @@
+project:
+  name: Cluster Auth Agent
+  shortName: Cluster Auth Agent
+  url: https://github.com/kluster-manager/cluster-auth
+  description: Cluster Auth Agent
+  app: an Cluster Auth Agent
+repository:
+  url: https://charts.appscode.com/stable
+  name: appscode
+chart:
+  name: cluster-auth
+  values: -- generate from values file --
+  valuesExample: -- generate from values file --
+prerequisites:
+- Kubernetes 1.21+
+release:
+  name: cluster-auth
+  namespace: open-cluster-management-cluster-auth

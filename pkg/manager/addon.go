@@ -14,35 +14,25 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package manager
 
 import (
-	"os"
-	"runtime"
+	"embed"
 
-	"github.com/kluster-manager/cluster-auth/pkg/cmds"
-
-	_ "go.bytebuilders.dev/license-verifier/info"
-	"gomodules.xyz/logs"
-	_ "k8s.io/client-go/kubernetes/fake"
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	"k8s.io/klog/v2"
+	"open-cluster-management.io/addon-framework/pkg/addonfactory"
+	addonv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
 )
 
-func main() {
-	if err := realMain(); err != nil {
-		klog.Fatalln("Error in Main:", err)
+//go:embed all:agent-manifests
+var FS embed.FS
+
+func GetDefaultValues(registryFQDN string) addonfactory.GetValuesFunc {
+	return func(cluster *clusterv1.ManagedCluster, addon *addonv1alpha1.ManagedClusterAddOn) (addonfactory.Values, error) {
+		vals := addonfactory.Values{}
+		if registryFQDN == "" {
+			vals["registryFQDN"] = registryFQDN
+		}
+		return vals, nil
 	}
-}
-
-func realMain() error {
-	rootCmd := cmds.NewRootCmd()
-	logs.Init(rootCmd, true)
-	defer logs.FlushLogs()
-
-	if len(os.Getenv("GOMAXPROCS")) == 0 {
-		runtime.GOMAXPROCS(runtime.NumCPU())
-	}
-
-	return rootCmd.Execute()
 }
