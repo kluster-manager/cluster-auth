@@ -77,4 +77,4 @@ monitoring:
     labels: {}
 apiServer:
   healthcheck:
-    enabled: true
+    enabled: false
