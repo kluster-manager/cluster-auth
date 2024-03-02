@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	cu "kmodules.xyz/client-go/client"
+	"kmodules.xyz/client-go/meta"
 	"kmodules.xyz/client-go/tools/clientcmd"
 	workv1 "open-cluster-management.io/api/work/v1"
 	managedsaapi "open-cluster-management.io/managed-serviceaccount/apis/authentication/v1alpha1"
@@ -281,7 +282,8 @@ func createManagedClusterRole(ctx context.Context, c client.Client, ns string, m
 	if errors.IsNotFound(err) {
 		_, err := cu.CreateOrPatch(context.Background(), c, managedCR, func(obj client.Object, createOp bool) client.Object {
 			in := obj.(*authorizationv1alpha1.ManagedClusterRole)
-			in = managedCR
+			in.Labels = meta.OverwriteKeys(in.Labels, managedCR.Labels)
+			in.Rules = managedCR.Rules
 			return in
 		})
 		if err != nil {
