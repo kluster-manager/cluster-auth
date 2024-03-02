@@ -14,12 +14,12 @@ require (
 	k8s.io/apimachinery v0.29.1
 	k8s.io/client-go v0.29.1
 	k8s.io/klog/v2 v2.110.1
-	kmodules.xyz/client-go v0.29.10
+	kmodules.xyz/client-go v0.29.12
 	open-cluster-management.io/addon-framework v0.9.0
 	open-cluster-management.io/api v0.13.0
 	open-cluster-management.io/managed-serviceaccount v0.4.0
 	open-cluster-management.io/sdk-go v0.13.0
-	sigs.k8s.io/controller-runtime v0.17.0
+	sigs.k8s.io/controller-runtime v0.17.2
 )
 
 require (
@@ -138,7 +138,7 @@ require (
 
 replace github.com/Masterminds/sprig/v3 => github.com/gomodules/sprig/v3 v3.2.3-0.20220405051441-0a8a99bac1b8
 
-replace sigs.k8s.io/controller-runtime => github.com/kmodules/controller-runtime v0.17.2-0.20240213085617-b6aac9684c00
+replace sigs.k8s.io/controller-runtime => github.com/kmodules/controller-runtime v0.17.3-0.20240301215359-aa29dfea56fd
 
 replace github.com/imdario/mergo => github.com/imdario/mergo v0.3.6
 

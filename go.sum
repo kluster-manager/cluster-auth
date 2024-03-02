@@ -221,8 +221,8 @@ github.com/kluster-manager/addon-framework v0.9.1-0.20240225065513-dbdc1604459c 
 github.com/kluster-manager/addon-framework v0.9.1-0.20240225065513-dbdc1604459c/go.mod h1:ZZvGRA/zmIjIww0reatmOxcXy0Eoghnat/Opszgo2NA=
 github.com/kmodules/apiserver v0.29.1-0.20240104121741-1fb217d4a573 h1:6v7bTFGH/Ha1idq1sLX9px2KJhcx6cpuMowuYRyCht4=
 github.com/kmodules/apiserver v0.29.1-0.20240104121741-1fb217d4a573/go.mod h1:31n78PsRKPmfpee7/l9NYEv67u6hOL6AfcE761HapDM=
-github.com/kmodules/controller-runtime v0.17.2-0.20240213085617-b6aac9684c00 h1:+2add9izgyGZb+ZOkMwPH/fswvgfIxWilUatbp2nPo8=
-github.com/kmodules/controller-runtime v0.17.2-0.20240213085617-b6aac9684c00/go.mod h1:+MngTvIQQQhfXtwfdGw/UOQ/aIaqsYywfCINOtwMO/s=
+github.com/kmodules/controller-runtime v0.17.3-0.20240301215359-aa29dfea56fd h1:VjD73vX8f7nia3vGBbtYb3Evk1sIsrzkQBnb6fp6VRA=
+github.com/kmodules/controller-runtime v0.17.3-0.20240301215359-aa29dfea56fd/go.mod h1:+MngTvIQQQhfXtwfdGw/UOQ/aIaqsYywfCINOtwMO/s=
 github.com/konsorten/go-windows-terminal-sequences v1.0.1/go.mod h1:T0+1ngSBFLxvqU3pZ+m/2kptfBszLMUkC4ZK/EgS/cQ=
 github.com/kr/logfmt v0.0.0-20140226030751-b84e30acd515/go.mod h1:+0opPa2QZZtGFBFZlji/RkVcI2GknAs/DXo4wKdlNEc=
 github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORNo=
@@ -653,8 +653,8 @@ k8s.io/kube-openapi v0.0.0-20231129212854-f0671cc7e66a h1:ZeIPbyHHqahGIbeyLJJjAU
 k8s.io/kube-openapi v0.0.0-20231129212854-f0671cc7e66a/go.mod h1:AsvuZPBlUDVuCdzJ87iajxtXuR9oktsTctW/R9wwouA=
 k8s.io/utils v0.0.0-20240102154912-e7106e64919e h1:eQ/4ljkx21sObifjzXwlPKpdGLrCfRziVtos3ofG/sQ=
 k8s.io/utils v0.0.0-20240102154912-e7106e64919e/go.mod h1:OLgZIPagt7ERELqWJFomSt595RzquPNLL48iOWgYOg0=
-kmodules.xyz/client-go v0.29.10 h1:vmbKaQ0CEOls4Ta8VjUxlcnvBhTzuhc5QAfGb9pAECM=
-kmodules.xyz/client-go v0.29.10/go.mod h1:WYM/ZC3I5/AUGHYyYYEzYHFhnSwK+tEZyGld6KpLoxI=
+kmodules.xyz/client-go v0.29.12 h1:OZV5a9fEJwx0XI8OJYDqYRuCEeJyhsZN0iUs1YCBeks=
+kmodules.xyz/client-go v0.29.12/go.mod h1:WYM/ZC3I5/AUGHYyYYEzYHFhnSwK+tEZyGld6KpLoxI=
 open-cluster-management.io/api v0.13.0 h1:dlcJEZlNlE0DmSDctK2s7iWKg9l+Tgb0V78Z040nMuk=
 open-cluster-management.io/api v0.13.0/go.mod h1:CuCPEzXDvOyxBB0H1d1eSeajbHqaeGEKq9c63vQc63w=
 open-cluster-management.io/managed-serviceaccount v0.4.0 h1:DPuNNR0a+sYnlvUkUB77mBNasl+fpl/vgKb1vq6+aqk=
