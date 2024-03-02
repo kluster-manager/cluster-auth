@@ -126,7 +126,7 @@ func createClusterRoleBindingForUser(ctx context.Context, c client.Client, manag
 		RoleRef: rbac.RoleRef{
 			APIGroup: rbac.GroupName,
 			Kind:     "ClusterRole",
-			Name:     "cluster-gateway-permission",
+			Name:     common.GatewayRole,
 		},
 	}
 	_, err := cu.CreateOrPatch(ctx, c, crb, func(obj client.Object, createOp bool) client.Object {
