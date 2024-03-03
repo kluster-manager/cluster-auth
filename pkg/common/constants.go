@@ -21,5 +21,5 @@ const (
 	AgentName                  = "cluster-auth"
 	AddonAgentInstallNamespace = "open-cluster-management-" + AddonName
 	AgentManifestsDir          = "agent-manifests/" + AddonName
-	GatewayRole                = "open-cluster-management:cluster-auth:cluster-gateway"
+	GatewayProxyClusterRole    = "open-cluster-management:cluster-gateway:proxy"
 )
