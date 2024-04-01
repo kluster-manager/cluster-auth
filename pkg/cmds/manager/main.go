@@ -37,6 +37,7 @@ import (
 	"open-cluster-management.io/addon-framework/pkg/addonfactory"
 	"open-cluster-management.io/addon-framework/pkg/addonmanager"
 	"open-cluster-management.io/addon-framework/pkg/utils"
+	"open-cluster-management.io/api/addon/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	clusterv1beta2 "open-cluster-management.io/api/cluster/v1beta2"
 	workv1 "open-cluster-management.io/api/work/v1"
@@ -115,6 +116,8 @@ func NewCmdManager() *cobra.Command {
 				WithGetValuesFuncs(
 					manager.GetDefaultValues(registryFQDN),
 				).
+				WithAgentHealthProber(agentHealthProber()).
+				WithAgentInstallNamespace(func(addon *v1alpha1.ManagedClusterAddOn) string { return common.AddonAgentInstallNamespace }).
 				WithCreateAgentInstallNamespace().
 				BuildHelmAgentAddon()
 			if err != nil {
