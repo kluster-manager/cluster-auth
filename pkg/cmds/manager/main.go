@@ -117,8 +117,9 @@ func NewCmdManager() *cobra.Command {
 					manager.GetDefaultValues(registryFQDN),
 				).
 				WithAgentHealthProber(agentHealthProber()).
-				WithAgentInstallNamespace(func(addon *v1alpha1.ManagedClusterAddOn) string { return common.AddonAgentInstallNamespace }).
-				WithCreateAgentInstallNamespace().
+				WithAgentInstallNamespace(func(addon *v1alpha1.ManagedClusterAddOn) (string, error) {
+					return common.AddonAgentInstallNamespace, nil
+				}).
 				BuildHelmAgentAddon()
 			if err != nil {
 				setupLog.Error(err, "failed to build agent")
