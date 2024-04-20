@@ -26,6 +26,7 @@ import (
 	"github.com/kluster-manager/cluster-auth/pkg/common"
 	"github.com/kluster-manager/cluster-auth/pkg/manager"
 	"github.com/kluster-manager/cluster-auth/pkg/manager/controller/authorization"
+	permission "github.com/kluster-manager/cluster-auth/pkg/manager/rbac"
 
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"github.com/spf13/cobra"
@@ -34,8 +35,10 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/rest"
 	"open-cluster-management.io/addon-framework/pkg/addonfactory"
 	"open-cluster-management.io/addon-framework/pkg/addonmanager"
+	"open-cluster-management.io/addon-framework/pkg/agent"
 	"open-cluster-management.io/addon-framework/pkg/utils"
 	"open-cluster-management.io/api/addon/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -63,6 +66,17 @@ func init() {
 	utilruntime.Must(workv1.Install(scheme))
 	utilruntime.Must(managedsaapi.AddToScheme(scheme))
 	utilruntime.Must(monitoringv1.AddToScheme(scheme))
+}
+
+func NewRegistrationOption(kubeConfig *rest.Config, addonName, agentName string) *agent.RegistrationOption {
+	return &agent.RegistrationOption{
+		CSRConfigurations: agent.KubeClientSignerConfigurations(addonName, agentName),
+		CSRApproveCheck:   agent.ApprovalAllCSRs,
+		PermissionConfig:  permission.SetupPermission(kubeConfig, agentName),
+		AgentInstallNamespace: func(addon *v1alpha1.ManagedClusterAddOn) (string, error) {
+			return common.AddonAgentInstallNamespace, nil
+		},
+	}
 }
 
 func NewCmdManager() *cobra.Command {
@@ -110,12 +124,12 @@ func NewCmdManager() *cobra.Command {
 				os.Exit(1)
 			}
 
+			registrationOption := NewRegistrationOption(mgr.GetConfig(), common.AddonName, common.AgentName)
 			agentAddOn, err := addonfactory.NewAgentAddonFactory(common.AddonName, manager.FS, common.AgentManifestsDir).
 				WithScheme(scheme).
 				WithConfigGVRs(utils.AddOnDeploymentConfigGVR).
-				WithGetValuesFuncs(
-					manager.GetDefaultValues(registryFQDN),
-				).
+				WithGetValuesFuncs(manager.GetDefaultValues(registryFQDN)).
+				WithAgentRegistrationOption(registrationOption).
 				WithAgentHealthProber(agentHealthProber()).
 				WithAgentInstallNamespace(func(addon *v1alpha1.ManagedClusterAddOn) (string, error) {
 					return common.AddonAgentInstallNamespace, nil

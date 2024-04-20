@@ -19,10 +19,11 @@ package controller
 import (
 	"context"
 
+	authzv1alpah1 "github.com/kluster-manager/cluster-auth/apis/authorization/v1alpha1"
+
 	rbac "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	cu "kmodules.xyz/client-go/client"
-	operatorv1 "open-cluster-management.io/api/operator/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -31,8 +32,9 @@ import (
 )
 
 // ManagedClusterRoleBindingReconciler reconciles a ManagedClusterRoleBinding object
-type ClusterRoleBindingReconciler struct {
-	client.Client
+type ManagedClusterRoleBindingReconciler struct {
+	HubClient   client.Client
+	SpokeClient client.Client
 }
 
 //+kubebuilder:rbac:groups=authorization.k8s.appscode.com,resources=managedclusterrolebindings,verbs=get;list;watch;create;update;patch;delete
@@ -48,27 +50,16 @@ type ClusterRoleBindingReconciler struct {
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
-func (r *ClusterRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-	logger.Info("Start reconciling------------------->")
+	logger.Info("Start reconciling...")
 
-	var cr rbac.ClusterRoleBinding
-	err := r.Get(ctx, req.NamespacedName, &cr)
-	if err != nil {
+	var managedCRB authzv1alpah1.ManagedClusterRoleBinding
+	if err := r.HubClient.Get(ctx, req.NamespacedName, &managedCRB); err != nil {
 		return reconcile.Result{}, err
 	}
 
-	userName, found := cr.Labels["authentication.k8s.appscode.com/username"]
-	if !found {
-		return reconcile.Result{}, err
-	}
-
-	// get klusterlet
-	kl := operatorv1.Klusterlet{}
-	err = r.Get(context.Background(), client.ObjectKey{Name: "klusterlet"}, &kl)
-	if err != nil {
-		return reconcile.Result{}, err
-	}
+	userName := managedCRB.Subjects[0].Name
 
 	// impersonate clusterRole
 	clusterRole := &rbac.ClusterRole{
@@ -85,7 +76,7 @@ func (r *ClusterRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		},
 	}
 
-	_, err = cu.CreateOrPatch(context.Background(), r, clusterRole, func(obj client.Object, createOp bool) client.Object {
+	_, err := cu.CreateOrPatch(context.Background(), r.SpokeClient, clusterRole, func(obj client.Object, createOp bool) client.Object {
 		in := obj.(*rbac.ClusterRole)
 		in.Rules = clusterRole.Rules
 		return in
@@ -114,10 +105,47 @@ func (r *ClusterRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.R
 		},
 	}
 
-	_, err = cu.CreateOrPatch(context.Background(), r, crb, func(obj client.Object, createOp bool) client.Object {
+	_, err = cu.CreateOrPatch(context.Background(), r.SpokeClient, crb, func(obj client.Object, createOp bool) client.Object {
 		in := obj.(*rbac.ClusterRoleBinding)
 		in.Subjects = crb.Subjects
 		in.RoleRef = crb.RoleRef
+		return in
+	})
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	sub := []rbac.Subject{
+		{
+			APIGroup: "",
+			Kind:     "User",
+			Name:     managedCRB.Subjects[0].Name,
+		},
+	}
+
+	userGivenClusterRolebinding := &rbac.ClusterRoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: rbac.SchemeGroupVersion.String(),
+			Kind:       "ClusterRoleBinding",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: managedCRB.Name,
+			Labels: map[string]string{
+				"authentication.k8s.appscode.com/username": managedCRB.Subjects[0].Name,
+			},
+		},
+		Subjects: sub,
+		RoleRef: rbac.RoleRef{
+			APIGroup: rbac.GroupName,
+			Kind:     "ClusterRole",
+			Name:     managedCRB.RoleRef.Name,
+		},
+	}
+
+	_, err = cu.CreateOrPatch(context.Background(), r.SpokeClient, userGivenClusterRolebinding, func(obj client.Object, createOp bool) client.Object {
+		in := obj.(*rbac.ClusterRoleBinding)
+		in.Subjects = userGivenClusterRolebinding.Subjects
+		in.RoleRef = userGivenClusterRolebinding.RoleRef
 		return in
 	})
 	if err != nil {
@@ -128,9 +156,9 @@ func (r *ClusterRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.R
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ClusterRoleBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ManagedClusterRoleBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&rbac.ClusterRoleBinding{}).Watches(&rbac.ClusterRoleBinding{}, &handler.EnqueueRequestForObject{}).
+		For(&authzv1alpah1.ManagedClusterRoleBinding{}).Watches(&authzv1alpah1.ManagedClusterRoleBinding{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 

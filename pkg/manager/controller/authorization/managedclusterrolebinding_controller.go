@@ -18,7 +18,6 @@ package authorization
 
 import (
 	"context"
-	errors2 "errors"
 	"time"
 
 	authenticationv1alpha1 "github.com/kluster-manager/cluster-auth/apis/authentication/v1alpha1"
@@ -35,7 +34,6 @@ import (
 	cu "kmodules.xyz/client-go/client"
 	"kmodules.xyz/client-go/meta"
 	"kmodules.xyz/client-go/tools/clientcmd"
-	workv1 "open-cluster-management.io/api/work/v1"
 	managedsaapi "open-cluster-management.io/managed-serviceaccount/apis/authentication/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -79,35 +77,6 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 		return reconcile.Result{}, err
 	}
 
-	managedCRBList := &authorizationv1alpha1.ManagedClusterRoleBindingList{}
-	if err := r.Client.List(ctx, managedCRBList, &client.ListOptions{Namespace: ns}); err != nil {
-		return reconcile.Result{}, err
-	}
-	clusterRoleBinding := generateManifestWorkPayload(managedCRBList)
-
-	manifestWorkName := generateManifestWorkName(ns)
-	manifestWork := buildManifestWork(clusterRoleBinding, manifestWorkName, ns)
-
-	if len(manifestWork.Spec.Workload.Manifests) == 0 {
-		return reconcile.Result{}, errors2.New("manifestwork item cant be 0")
-	}
-	var mw workv1.ManifestWork
-	err = r.Get(ctx, types.NamespacedName{Name: manifestWorkName, Namespace: ns}, &mw)
-	if errors.IsNotFound(err) {
-		err = r.Client.Create(ctx, manifestWork)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-	} else if err == nil {
-		mw.Spec = manifestWork.Spec
-		err = r.Client.Update(ctx, &mw)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-	} else {
-		return ctrl.Result{}, err
-	}
-
 	return reconcile.Result{}, nil
 }
 
@@ -142,13 +111,30 @@ func createClusterRoleBindingForUser(ctx context.Context, c client.Client, manag
 }
 
 func createServiceAccountForUser(ctx context.Context, c client.Client, managedCRB *authorizationv1alpha1.ManagedClusterRoleBinding) error {
+	// create ns to store service-accounts and tokens of users
+	ns := &core.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: common.AddonAgentInstallNamespace,
+		},
+	}
+
+	_, err := cu.CreateOrPatch(context.Background(), c, ns, func(obj client.Object, createOp bool) client.Object {
+		in := obj.(*core.ServiceAccount)
+		in.ObjectMeta = ns.ObjectMeta
+		return in
+	})
+	if err != nil {
+		return err
+	}
+
+	// create sa for user
 	sa := &core.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "ace-sa-" + managedCRB.Subjects[0].Name,
 			Namespace: common.AddonAgentInstallNamespace,
 		},
 	}
-	_, err := cu.CreateOrPatch(context.Background(), c, sa, func(obj client.Object, createOp bool) client.Object {
+	_, err = cu.CreateOrPatch(context.Background(), c, sa, func(obj client.Object, createOp bool) client.Object {
 		in := obj.(*core.ServiceAccount)
 		in.ObjectMeta = sa.ObjectMeta
 		return in
@@ -164,7 +150,7 @@ func createServiceAccountForUser(ctx context.Context, c client.Client, managedCR
 
 	// TODO: remove this part
 	// create a ns to save the kubeconfig
-	ns := &core.Namespace{
+	ns = &core.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "kc-ns",
 		},

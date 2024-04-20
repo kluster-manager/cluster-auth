@@ -78,3 +78,6 @@ monitoring:
 apiServer:
   healthcheck:
     enabled: false
+
+# Name of OCM Hub Kubeconfig secret
+hubKubeconfigSecretName: ""
