@@ -24,40 +24,9 @@ import (
 
 	rbac "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	cu "kmodules.xyz/client-go/client"
-	workv1 "open-cluster-management.io/api/work/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-// generateManifestWorkName returns the ManifestWork name for a given ClusterPermission.
-// It uses the ClusterPermission name with the suffix of the first 5 characters of the UID
-func generateManifestWorkName(name string) string {
-	return name + "-auth"
-}
-
-// buildManifestWork wraps the payloads in a ManifestWork
-func buildManifestWork(clusterRoleBinding []rbac.ClusterRoleBinding, manifestWorkName string, ns string) *workv1.ManifestWork {
-	var manifests []workv1.Manifest
-
-	if len(clusterRoleBinding) > 0 {
-		for i := range clusterRoleBinding {
-			manifests = append(manifests, workv1.Manifest{RawExtension: runtime.RawExtension{Object: &clusterRoleBinding[i]}})
-		}
-	}
-
-	return &workv1.ManifestWork{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      manifestWorkName,
-			Namespace: ns,
-		},
-		Spec: workv1.ManifestWorkSpec{
-			Workload: workv1.ManifestsTemplate{
-				Manifests: manifests,
-			},
-		},
-	}
-}
 
 func createClusterRoleAndClusterRoleBindingToImpersonate(ctx context.Context, c client.Client, managedCR *v1alpha1.ManagedClusterRole) error {
 	// impersonate clusterRole
@@ -109,40 +78,4 @@ func createClusterRoleAndClusterRoleBindingToImpersonate(ctx context.Context, c 
 	}
 
 	return nil
-}
-
-func generateManifestWorkPayload(managedCRBList *v1alpha1.ManagedClusterRoleBindingList) []rbac.ClusterRoleBinding {
-	var clusterRoleBindings []rbac.ClusterRoleBinding
-
-	for _, managedCRB := range managedCRBList.Items {
-		// now give the managed-serviceaccount permission to impersonate user
-		sub := []rbac.Subject{
-			{
-				APIGroup: "",
-				Kind:     "User",
-				Name:     managedCRB.Subjects[0].Name,
-			},
-		}
-		crb := rbac.ClusterRoleBinding{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: rbac.SchemeGroupVersion.String(),
-				Kind:       "ClusterRoleBinding",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name: managedCRB.Name,
-				Labels: map[string]string{
-					"authentication.k8s.appscode.com/username": managedCRB.Subjects[0].Name,
-				},
-			},
-			Subjects: sub,
-			RoleRef: rbac.RoleRef{
-				APIGroup: rbac.GroupName,
-				Kind:     "ClusterRole",
-				Name:     managedCRB.RoleRef.Name,
-			},
-		}
-		clusterRoleBindings = append(clusterRoleBindings, crb)
-	}
-
-	return clusterRoleBindings
 }
