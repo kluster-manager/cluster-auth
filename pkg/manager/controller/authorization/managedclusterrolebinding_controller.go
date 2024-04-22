@@ -18,7 +18,6 @@ package authorization
 
 import (
 	"context"
-	"time"
 
 	authenticationv1alpha1 "github.com/kluster-manager/cluster-auth/apis/authentication/v1alpha1"
 	authorizationv1alpha1 "github.com/kluster-manager/cluster-auth/apis/authorization/v1alpha1"
@@ -26,15 +25,12 @@ import (
 
 	core "k8s.io/api/core/v1"
 	rbac "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	cu "kmodules.xyz/client-go/client"
-	"kmodules.xyz/client-go/meta"
 	"kmodules.xyz/client-go/tools/clientcmd"
-	managedsaapi "open-cluster-management.io/managed-serviceaccount/apis/authentication/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -58,11 +54,6 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 		return reconcile.Result{}, err
 	}
 
-	ns := managedCRB.GetNamespace()
-	if err = createManagedServiceAccount(ctx, ns, r.Client); err != nil {
-		return reconcile.Result{}, err
-	}
-
 	// create a service account for user
 	if err = createServiceAccountForUser(ctx, r.Client, managedCRB); err != nil {
 		return reconcile.Result{}, err
@@ -73,7 +64,7 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 		return reconcile.Result{}, err
 	}
 
-	if err = createManagedClusterRole(ctx, r.Client, ns, managedCRB); err != nil {
+	if err = createClusterRoleAndClusterRoleBindingToImpersonate(ctx, r.Client, managedCRB); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -208,74 +199,60 @@ func createServiceAccountForUser(ctx context.Context, c client.Client, managedCR
 	return nil
 }
 
-func createManagedServiceAccount(ctx context.Context, ns string, c client.Client) error {
-	managedSA := &managedsaapi.ManagedServiceAccount{
+func createClusterRoleAndClusterRoleBindingToImpersonate(ctx context.Context, c client.Client, managedCRB *authorizationv1alpha1.ManagedClusterRoleBinding) error {
+	userName := managedCRB.Subjects[0].Name
+	// impersonate clusterRole
+	cr := &rbac.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "managedserviceaccount-" + ns,
-			Namespace: ns,
-		},
-		Spec: managedsaapi.ManagedServiceAccountSpec{
-			Rotation: managedsaapi.ManagedServiceAccountRotation{
-				Enabled: true,
-				Validity: metav1.Duration{
-					Duration: time.Hour * 720,
-				},
-			},
-		},
-	}
-
-	msa := &managedsaapi.ManagedServiceAccount{}
-	err := c.Get(ctx, types.NamespacedName{Name: managedSA.Name, Namespace: managedSA.Namespace}, msa)
-	if errors.IsNotFound(err) {
-		_, err = cu.CreateOrPatch(context.Background(), c, managedSA, func(obj client.Object, createOp bool) client.Object {
-			in := obj.(*managedsaapi.ManagedServiceAccount)
-			in.Spec = managedSA.Spec
-			return in
-		})
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func createManagedClusterRole(ctx context.Context, c client.Client, ns string, managedCRB *authorizationv1alpha1.ManagedClusterRoleBinding) error {
-	usr := &authenticationv1alpha1.User{}
-	if err := c.Get(ctx, types.NamespacedName{Name: managedCRB.Subjects[0].Name}, usr); err != nil {
-		return err
-	}
-
-	managedCR := &authorizationv1alpha1.ManagedClusterRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "ace-user-" + usr.Name,
-			Namespace: ns,
-			Labels: map[string]string{
-				"authentication.k8s.appscode.com/username": usr.Name,
-			},
+			Name: "ace-user-" + userName,
 		},
 		Rules: []rbac.PolicyRule{
 			{
 				APIGroups:     []string{""},
 				Resources:     []string{"users"},
 				Verbs:         []string{"impersonate"},
-				ResourceNames: []string{usr.Name},
+				ResourceNames: []string{userName},
 			},
 		},
 	}
 
-	err := c.Get(ctx, types.NamespacedName{Namespace: managedCR.Namespace, Name: managedCR.Name}, managedCR)
-	if errors.IsNotFound(err) {
-		_, err := cu.CreateOrPatch(context.Background(), c, managedCR, func(obj client.Object, createOp bool) client.Object {
-			in := obj.(*authorizationv1alpha1.ManagedClusterRole)
-			in.Labels = meta.OverwriteKeys(in.Labels, managedCR.Labels)
-			in.Rules = managedCR.Rules
-			return in
-		})
-		if err != nil {
-			return err
-		}
-	} else {
+	_, err := cu.CreateOrPatch(ctx, c, cr, func(obj client.Object, createOp bool) client.Object {
+		in := obj.(*rbac.ClusterRole)
+		in.Rules = cr.Rules
+		return in
+	})
+	if err != nil {
+		return err
+	}
+
+	// now give the service-account permission to impersonate user
+	sub := []rbac.Subject{
+		{
+			APIGroup:  "",
+			Kind:      "ServiceAccount",
+			Name:      "ace-sa-" + userName,
+			Namespace: common.AddonAgentInstallNamespace,
+		},
+	}
+	crb := &rbac.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "ace-user-" + userName,
+		},
+		Subjects: sub,
+		RoleRef: rbac.RoleRef{
+			APIGroup: rbac.GroupName,
+			Kind:     "ClusterRole",
+			Name:     cr.Name,
+		},
+	}
+
+	_, err = cu.CreateOrPatch(context.Background(), c, crb, func(obj client.Object, createOp bool) client.Object {
+		in := obj.(*rbac.ClusterRoleBinding)
+		in.Subjects = crb.Subjects
+		in.RoleRef = crb.RoleRef
+		return in
+	})
+	if err != nil {
 		return err
 	}
 

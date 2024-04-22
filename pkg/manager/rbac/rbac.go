@@ -59,6 +59,11 @@ func SetupPermission(kubeConfig *rest.Config, agentName string) agent.Permission
 					Verbs:     []string{"get", "list", "watch"},
 					Resources: []string{"managedclusterrolebindings"},
 				},
+				{
+					APIGroups: []string{"authorization.k8s.appscode.com"},
+					Verbs:     []string{"get", "list", "watch"},
+					Resources: []string{"managedclusterroles"},
+				},
 			},
 		}
 		roleBinding := &rbacv1.RoleBinding{

@@ -123,35 +123,66 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 		},
 	}
 
-	userGivenClusterRolebinding := &rbac.ClusterRoleBinding{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: rbac.SchemeGroupVersion.String(),
-			Kind:       "ClusterRoleBinding",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: managedCRB.Name,
-			Labels: map[string]string{
-				"authentication.k8s.appscode.com/username": managedCRB.Subjects[0].Name,
+	if managedCRB.RoleRef.Namespaces == nil {
+		givenClusterRolebinding := &rbac.ClusterRoleBinding{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: rbac.SchemeGroupVersion.String(),
+				Kind:       "ClusterRoleBinding",
 			},
-		},
-		Subjects: sub,
-		RoleRef: rbac.RoleRef{
-			APIGroup: rbac.GroupName,
-			Kind:     "ClusterRole",
-			Name:     managedCRB.RoleRef.Name,
-		},
-	}
+			ObjectMeta: metav1.ObjectMeta{
+				Name: managedCRB.Name,
+				Labels: map[string]string{
+					"authentication.k8s.appscode.com/username": managedCRB.Subjects[0].Name,
+				},
+			},
+			Subjects: sub,
+			RoleRef: rbac.RoleRef{
+				APIGroup: rbac.GroupName,
+				Kind:     "ClusterRole",
+				Name:     managedCRB.RoleRef.Name,
+			},
+		}
 
-	_, err = cu.CreateOrPatch(context.Background(), r.SpokeClient, userGivenClusterRolebinding, func(obj client.Object, createOp bool) client.Object {
-		in := obj.(*rbac.ClusterRoleBinding)
-		in.Subjects = userGivenClusterRolebinding.Subjects
-		in.RoleRef = userGivenClusterRolebinding.RoleRef
-		return in
-	})
-	if err != nil {
-		return reconcile.Result{}, err
-	}
+		_, err = cu.CreateOrPatch(context.Background(), r.SpokeClient, givenClusterRolebinding, func(obj client.Object, createOp bool) client.Object {
+			in := obj.(*rbac.ClusterRoleBinding)
+			in.Subjects = givenClusterRolebinding.Subjects
+			in.RoleRef = givenClusterRolebinding.RoleRef
+			return in
+		})
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+	} else {
+		givenRolebinding := &rbac.RoleBinding{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: rbac.SchemeGroupVersion.String(),
+				Kind:       "RoleBinding",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      managedCRB.Name,
+				Namespace: managedCRB.Namespace,
+				Labels: map[string]string{
+					"authentication.k8s.appscode.com/username": managedCRB.Subjects[0].Name,
+				},
+			},
+			Subjects: sub,
+			RoleRef: rbac.RoleRef{
+				APIGroup: rbac.GroupName,
+				Kind:     "Role",
+				Name:     managedCRB.RoleRef.Name,
+			},
+		}
 
+		_, err = cu.CreateOrPatch(context.Background(), r.SpokeClient, givenRolebinding, func(obj client.Object, createOp bool) client.Object {
+			in := obj.(*rbac.ClusterRoleBinding)
+			in.Subjects = givenRolebinding.Subjects
+			in.RoleRef = givenRolebinding.RoleRef
+			return in
+		})
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+	}
 	return reconcile.Result{}, nil
 }
 

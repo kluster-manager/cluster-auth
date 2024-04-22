@@ -14,14 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package authorization
+package controller
 
 import (
 	"context"
 
 	authorizationv1alpha1 "github.com/kluster-manager/cluster-auth/apis/authorization/v1alpha1"
 
-	"k8s.io/apimachinery/pkg/runtime"
+	rbac "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	cu "kmodules.xyz/client-go/client"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -31,8 +33,9 @@ import (
 
 // ManagedClusterRoleReconciler reconciles a ManagedClusterRole object
 type ManagedClusterRoleReconciler struct {
-	client.Client
-	Scheme *runtime.Scheme
+	HubClient   client.Client
+	SpokeClient client.Client
+	ClusterName string
 }
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -49,11 +52,24 @@ func (r *ManagedClusterRoleReconciler) Reconcile(ctx context.Context, req ctrl.R
 	logger.Info("Start reconciling")
 
 	managedClusterRole := &authorizationv1alpha1.ManagedClusterRole{}
-	if err := r.Client.Get(ctx, req.NamespacedName, managedClusterRole); err != nil {
+	if err := r.HubClient.Get(ctx, req.NamespacedName, managedClusterRole); err != nil {
 		return reconcile.Result{}, err
 	}
 
-	if err := createClusterRoleAndClusterRoleBindingToImpersonate(ctx, r.Client, managedClusterRole); err != nil {
+	// create clusterRole in spoke cluster
+	cr := &rbac.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: managedClusterRole.Name,
+		},
+		Rules: managedClusterRole.Rules,
+	}
+
+	_, err := cu.CreateOrPatch(ctx, r.SpokeClient, cr, func(obj client.Object, createOp bool) client.Object {
+		in := obj.(*rbac.ClusterRole)
+		in.Rules = cr.Rules
+		return in
+	})
+	if err != nil {
 		return reconcile.Result{}, err
 	}
 
