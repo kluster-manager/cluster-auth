@@ -37,6 +37,9 @@ spec:
         args:
         - agent
         - --v={{ .Values.logLevel }}
+        {{- if .Values.hubKubeconfigSecretName }}
+        - --hub-kubeconfig=/var/run/secrets/ocm/auth/kubeconfig
+        {{- end }}
         ports:
         - containerPort: 8080
         env:
@@ -64,6 +67,18 @@ spec:
       {{- end }}
         resources:
           {{- toYaml .Values.image.resources | nindent 10 }}
+        volumeMounts:
+        {{- if .Values.hubKubeconfigSecretName }}
+        - mountPath: /var/run/secrets/ocm/auth
+          name: ocm-auth
+        {{- end }}
+      volumes:
+      {{- if .Values.hubKubeconfigSecretName }}
+      - name: ocm-auth
+        secret:
+          defaultMode: 420
+          secretName: {{ .Values.hubKubeconfigSecretName }}
+      {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
     {{- if or .Values.tolerations $criticalAddon }}

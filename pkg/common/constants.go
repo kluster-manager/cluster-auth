@@ -22,4 +22,5 @@ const (
 	AddonAgentInstallNamespace = "open-cluster-management-" + AddonName
 	AgentManifestsDir          = "agent-manifests/" + AddonName
 	GatewayProxyClusterRole    = "open-cluster-management:cluster-gateway:proxy"
+	HubKubeconfigSecretName    = "cluster-auth-hub-kubeconfig"
 )

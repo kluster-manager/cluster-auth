@@ -31,12 +31,17 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
+	cu "kmodules.xyz/client-go/client"
 	ocmoperator "open-cluster-management.io/api/operator/v1"
 	managedsaapi "open-cluster-management.io/managed-serviceaccount/apis/authentication/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
@@ -59,6 +64,7 @@ func NewCmdAgent() *cobra.Command {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
+	var hubKC string
 	opts := zap.Options{
 		Development: true,
 	}
@@ -77,27 +83,67 @@ func NewCmdAgent() *cobra.Command {
 				HealthProbeBindAddress: probeAddr,
 				LeaderElection:         enableLeaderElection,
 				LeaderElectionID:       "cluster-auth-agent",
-				// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
-				// when the Manager ends. This requires the binary to immediately end when the
-				// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
-				// speeds up voluntary leader transitions as the new leader don't have to wait
-				// LeaseDuration time first.
-				//
-				// In the default scaffold provided, the program ends immediately after
-				// the manager stops, so would be fine to enable this option. However,
-				// if you are doing or is intended to do any operation such as perform cleanups
-				// after the manager stops then its usage might be unsafe.
-				// LeaderElectionReleaseOnCancel: true,
 			})
 			if err != nil {
 				setupLog.Error(err, "unable to start manager")
 				os.Exit(1)
 			}
 
-			if err = (&controller.ClusterRoleBindingReconciler{
-				Client: mgr.GetClient(),
-			}).SetupWithManager(mgr); err != nil {
-				klog.Fatalf("unable to create controller %v", "ManagedServiceAccount")
+			// get hub kubeconfig
+			hubConfig, err := clientcmd.BuildConfigFromFlags("", hubKC)
+			if err != nil {
+				klog.Fatalf("unable to build hub rest config: %v", err)
+				os.Exit(1)
+			}
+
+			// get klusterlet
+			kl := ocmoperator.Klusterlet{}
+			err = mgr.GetAPIReader().Get(context.Background(), client.ObjectKey{Name: "klusterlet"}, &kl)
+			if err != nil {
+				klog.Fatalf("unable to get klusterlet: %v", err)
+				os.Exit(1)
+			}
+
+			hubManager, err := manager.New(hubConfig, manager.Options{
+				Scheme:                 scheme,
+				Metrics:                metricsserver.Options{BindAddress: "0"},
+				HealthProbeBindAddress: "",
+				NewClient:              cu.NewClient,
+				Cache: cache.Options{
+					ByObject: map[client.Object]cache.ByObject{
+						&authorizationv1alpha1.ManagedClusterRoleBinding{}: {
+							Namespaces: map[string]cache.Config{
+								kl.Spec.ClusterName: {},
+							},
+						},
+						&authorizationv1alpha1.ManagedClusterRole{}: {
+							Namespaces: map[string]cache.Config{
+								kl.Spec.ClusterName: {},
+							},
+						},
+					},
+				},
+			})
+			if err != nil {
+				setupLog.Error(err, "unable to start hub manager")
+				os.Exit(1)
+			}
+
+			if err := (&controller.ManagedClusterRoleBindingReconciler{
+				HubClient:   hubManager.GetClient(),
+				SpokeClient: mgr.GetClient(),
+			}).SetupWithManager(hubManager); err != nil {
+				setupLog.Error(err, "unable to create controller", "controller", "ManagedClusterRoleBindingReconciler")
+				os.Exit(1)
+			}
+
+			if err := (&controller.ManagedClusterRoleReconciler{
+				HubClient:   hubManager.GetClient(),
+				SpokeClient: mgr.GetClient(),
+				ClusterName: kl.Spec.ClusterName,
+			}).SetupWithManager(hubManager); err != nil {
+				setupLog.Error(err, "unable to create controller", "controller", "ManagedClusterRoleReconciler")
+				os.Exit(1)
 			}
 
 			ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
@@ -112,9 +158,19 @@ func NewCmdAgent() *cobra.Command {
 				os.Exit(1)
 			}
 
+			err = mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+				setupLog.Info("starting hub manager")
+				return hubManager.Start(ctx)
+			}))
+			if err != nil {
+				setupLog.Error(err, "problem running hub manager")
+				os.Exit(1)
+			}
+
 			setupLog.Info("starting manager")
 			if err := mgr.Start(ctx); err != nil {
 				klog.Fatalf("unable to start controller manager: %v", err)
+				os.Exit(1)
 			}
 		},
 	}
@@ -124,6 +180,7 @@ func NewCmdAgent() *cobra.Command {
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	flag.StringVar(&hubKC, "hub-kubeconfig", "", "Path to hub kubeconfig")
 
 	fs := flag.NewFlagSet("zap", flag.ExitOnError)
 	opts.BindFlags(fs)
