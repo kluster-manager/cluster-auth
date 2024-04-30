@@ -58,7 +58,7 @@ type ClusterSetRoleRef struct {
 	Name string `json:"name"`
 	// Namespaces are the name of the namespaces for Roles
 	// +optional
-	Namespaces []string `json:"namespaces"`
+	Namespaces []string `json:"namespaces,omitempty"`
 }
 
 // ClusterSetRef contains information that points to the ManagedClusterSet being used
