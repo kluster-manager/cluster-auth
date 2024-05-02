@@ -110,7 +110,7 @@ func createServiceAccountForUser(ctx context.Context, c client.Client, managedCR
 	}
 
 	_, err := cu.CreateOrPatch(context.Background(), c, ns, func(obj client.Object, createOp bool) client.Object {
-		in := obj.(*core.ServiceAccount)
+		in := obj.(*core.Namespace)
 		in.ObjectMeta = ns.ObjectMeta
 		return in
 	})

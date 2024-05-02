@@ -18,8 +18,6 @@ package authorization
 
 import (
 	"context"
-	"fmt"
-	"strconv"
 
 	authorizationv1alpha1 "github.com/kluster-manager/cluster-auth/apis/authorization/v1alpha1"
 
@@ -110,8 +108,4 @@ func (r *ManagedClusterSetRoleBindingReconciler) SetupWithManager(mgr ctrl.Manag
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&authorizationv1alpha1.ManagedClusterSetRoleBinding{}).
 		Complete(r)
-}
-
-func getAuthUserName(userID int64) string {
-	return fmt.Sprintf("ace-user-%s", strconv.FormatInt(userID, 10))
 }
