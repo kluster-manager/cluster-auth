@@ -174,7 +174,7 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 		}
 
 		_, err = cu.CreateOrPatch(context.Background(), r.SpokeClient, givenRolebinding, func(obj client.Object, createOp bool) client.Object {
-			in := obj.(*rbac.ClusterRoleBinding)
+			in := obj.(*rbac.RoleBinding)
 			in.Subjects = givenRolebinding.Subjects
 			in.RoleRef = givenRolebinding.RoleRef
 			return in
