@@ -81,6 +81,9 @@ func (r *ManagedClusterSetRoleBindingReconciler) Reconcile(ctx context.Context, 
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      managedCSRB.Name + "-" + cluster.Name,
 				Namespace: cluster.Name,
+				Labels: map[string]string{
+					"authentication.k8s.appscode.com/user": managedCSRB.Subjects[0].Name,
+				},
 			},
 			Subjects: managedCSRB.Subjects,
 			RoleRef:  authorizationv1alpha1.ClusterRoleRef(managedCSRB.RoleRef),
