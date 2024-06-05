@@ -58,6 +58,10 @@ func GetDefaultValues(registryFQDN string) addonfactory.GetValuesFunc {
 			return nil, err
 		}
 
+		if err = unstructured.SetNestedField(values, cluster.Name, "clusterName"); err != nil {
+			return nil, err
+		}
+
 		return values, nil
 	}
 }

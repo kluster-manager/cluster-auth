@@ -81,3 +81,6 @@ apiServer:
 
 # Name of OCM Hub Kubeconfig secret
 hubKubeconfigSecretName: ""
+
+# We need to pass the cluster name because the OCM-MC host cluster doesn't have Klusterlet object.
+clusterName: ""
