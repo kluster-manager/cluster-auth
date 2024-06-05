@@ -20,9 +20,3 @@ rules:
   - roles
   - rolebindings
   verbs: ["*"]
-# ocm cluster name detection
-- apiGroups:
-  - operator.open-cluster-management.io
-  resources:
-  - klusterlets
-  verbs: ["get", "list", "watch"]

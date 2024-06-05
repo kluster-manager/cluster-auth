@@ -34,7 +34,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 	cu "kmodules.xyz/client-go/client"
-	ocmoperator "open-cluster-management.io/api/operator/v1"
 	managedsaapi "open-cluster-management.io/managed-serviceaccount/apis/authentication/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -57,7 +56,6 @@ func init() {
 	utilruntime.Must(authenticationv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(authorizationv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(managedsaapi.AddToScheme(scheme))
-	utilruntime.Must(ocmoperator.Install(scheme))
 }
 
 func NewCmdAgent() *cobra.Command {
