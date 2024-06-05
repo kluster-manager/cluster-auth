@@ -40,6 +40,9 @@ spec:
         {{- if .Values.hubKubeconfigSecretName }}
         - --hub-kubeconfig=/var/run/secrets/ocm/auth/kubeconfig
         {{- end }}
+        {{- if .Values.clusterName }}
+        - --cluster-name={{ .Values.clusterName }}
+        {{- end }}
         ports:
         - containerPort: 8080
         env:

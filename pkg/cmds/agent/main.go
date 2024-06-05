@@ -65,6 +65,7 @@ func NewCmdAgent() *cobra.Command {
 	var enableLeaderElection bool
 	var probeAddr string
 	var hubKC string
+	var spokeClusterName string
 	opts := zap.Options{
 		Development: true,
 	}
@@ -96,14 +97,6 @@ func NewCmdAgent() *cobra.Command {
 				os.Exit(1)
 			}
 
-			// get klusterlet
-			kl := ocmoperator.Klusterlet{}
-			err = mgr.GetAPIReader().Get(context.Background(), client.ObjectKey{Name: "klusterlet"}, &kl)
-			if err != nil {
-				klog.Fatalf("unable to get klusterlet: %v", err)
-				os.Exit(1)
-			}
-
 			hubManager, err := manager.New(hubConfig, manager.Options{
 				Scheme:                 scheme,
 				Metrics:                metricsserver.Options{BindAddress: "0"},
@@ -113,12 +106,12 @@ func NewCmdAgent() *cobra.Command {
 					ByObject: map[client.Object]cache.ByObject{
 						&authorizationv1alpha1.ManagedClusterRoleBinding{}: {
 							Namespaces: map[string]cache.Config{
-								kl.Spec.ClusterName: {},
+								spokeClusterName: {},
 							},
 						},
 						&authorizationv1alpha1.ManagedClusterRole{}: {
 							Namespaces: map[string]cache.Config{
-								kl.Spec.ClusterName: {},
+								spokeClusterName: {},
 							},
 						},
 					},
@@ -140,7 +133,7 @@ func NewCmdAgent() *cobra.Command {
 			if err := (&controller.ManagedClusterRoleReconciler{
 				HubClient:   hubManager.GetClient(),
 				SpokeClient: mgr.GetClient(),
-				ClusterName: kl.Spec.ClusterName,
+				ClusterName: spokeClusterName,
 			}).SetupWithManager(hubManager); err != nil {
 				setupLog.Error(err, "unable to create controller", "controller", "ManagedClusterRoleReconciler")
 				os.Exit(1)
@@ -181,6 +174,7 @@ func NewCmdAgent() *cobra.Command {
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&hubKC, "hub-kubeconfig", "", "Path to hub kubeconfig")
+	flag.StringVar(&spokeClusterName, "cluster-name", "", "Spoke cluster name")
 
 	fs := flag.NewFlagSet("zap", flag.ExitOnError)
 	opts.BindFlags(fs)
