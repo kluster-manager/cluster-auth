@@ -18,8 +18,10 @@ package controller
 
 import (
 	"context"
+	"fmt"
 
 	authzv1alpah1 "github.com/kluster-manager/cluster-auth/apis/authorization/v1alpha1"
+	"github.com/kluster-manager/cluster-auth/pkg/utils"
 
 	rbac "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -58,13 +60,14 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 	if err := r.HubClient.Get(ctx, req.NamespacedName, &managedCRB); err != nil {
 		return reconcile.Result{}, err
 	}
-
+	_, hubOwnerID := utils.GetUserIDAndHubOwnerIDFromLabelValues(&managedCRB)
 	userName := managedCRB.Subjects[0].Name
 
 	// impersonate clusterRole
 	clusterRole := &rbac.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "impersonate-" + userName,
+			Name:   fmt.Sprintf("impersonate-%s-%s", userName, hubOwnerID),
+			Labels: managedCRB.Labels,
 		},
 		Rules: []rbac.PolicyRule{
 			{
@@ -88,7 +91,8 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 	// this clusterRoleBinding will give permission to the user
 	crb := &rbac.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "impersonate-" + userName + "-rolebinding",
+			Name:   fmt.Sprintf("impersonate-%s-%s-rolebinding", userName, hubOwnerID),
+			Labels: managedCRB.Labels,
 		},
 		Subjects: []rbac.Subject{
 			{
@@ -101,7 +105,7 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 		RoleRef: rbac.RoleRef{
 			APIGroup: rbac.GroupName,
 			Kind:     "ClusterRole",
-			Name:     "impersonate-" + userName,
+			Name:     clusterRole.Name,
 		},
 	}
 
@@ -115,6 +119,7 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 		return reconcile.Result{}, err
 	}
 
+	// now give actual permission to the User
 	sub := []rbac.Subject{
 		{
 			APIGroup: "",
@@ -130,10 +135,8 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 				Kind:       "ClusterRoleBinding",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name: managedCRB.Name,
-				Labels: map[string]string{
-					"authentication.k8s.appscode.com/username": managedCRB.Subjects[0].Name,
-				},
+				Name:   managedCRB.Name,
+				Labels: managedCRB.Labels,
 			},
 			Subjects: sub,
 			RoleRef: rbac.RoleRef{
@@ -153,34 +156,34 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 			return reconcile.Result{}, err
 		}
 	} else {
-		givenRolebinding := &rbac.RoleBinding{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: rbac.SchemeGroupVersion.String(),
-				Kind:       "RoleBinding",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      managedCRB.Name,
-				Namespace: managedCRB.Namespace,
-				Labels: map[string]string{
-					"authentication.k8s.appscode.com/username": managedCRB.Subjects[0].Name,
+		for _, ns := range managedCRB.RoleRef.Namespaces {
+			givenRolebinding := &rbac.RoleBinding{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: rbac.SchemeGroupVersion.String(),
+					Kind:       "RoleBinding",
 				},
-			},
-			Subjects: sub,
-			RoleRef: rbac.RoleRef{
-				APIGroup: rbac.GroupName,
-				Kind:     "Role",
-				Name:     managedCRB.RoleRef.Name,
-			},
-		}
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      managedCRB.Name,
+					Namespace: ns,
+					Labels:    managedCRB.Labels,
+				},
+				Subjects: sub,
+				RoleRef: rbac.RoleRef{
+					APIGroup: rbac.GroupName,
+					Kind:     "Role",
+					Name:     managedCRB.RoleRef.Name,
+				},
+			}
 
-		_, err = cu.CreateOrPatch(context.Background(), r.SpokeClient, givenRolebinding, func(obj client.Object, createOp bool) client.Object {
-			in := obj.(*rbac.RoleBinding)
-			in.Subjects = givenRolebinding.Subjects
-			in.RoleRef = givenRolebinding.RoleRef
-			return in
-		})
-		if err != nil {
-			return reconcile.Result{}, err
+			_, err = cu.CreateOrPatch(context.Background(), r.SpokeClient, givenRolebinding, func(obj client.Object, createOp bool) client.Object {
+				in := obj.(*rbac.RoleBinding)
+				in.Subjects = givenRolebinding.Subjects
+				in.RoleRef = givenRolebinding.RoleRef
+				return in
+			})
+			if err != nil {
+				return reconcile.Result{}, err
+			}
 		}
 	}
 	return reconcile.Result{}, nil

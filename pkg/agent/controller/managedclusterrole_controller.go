@@ -59,7 +59,8 @@ func (r *ManagedClusterRoleReconciler) Reconcile(ctx context.Context, req ctrl.R
 	// create clusterRole in spoke cluster
 	cr := &rbac.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: managedClusterRole.Name,
+			Name:   managedClusterRole.Name,
+			Labels: managedClusterRole.Labels,
 		},
 		Rules: managedClusterRole.Rules,
 	}
