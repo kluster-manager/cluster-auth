@@ -32,8 +32,10 @@ spec:
       - name: agent
         securityContext:
           {{- toYaml .Values.image.securityContext | nindent 10 }}
-        image: {{ include "image.registry" . }}/{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
-        imagePullPolicy: {{ .Values.imagePullPolicy  }}
+{{/*        image: {{ include "image.registry" . }}/{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}*/}}
+{{/*        imagePullPolicy: {{ .Values.imagePullPolicy  }}*/}}
+        image: rokibulhasan114/cluster-auth:auth-rework_linux_amd64
+        imagePullPolicy: Always
         args:
         - agent
         - --v={{ .Values.logLevel }}

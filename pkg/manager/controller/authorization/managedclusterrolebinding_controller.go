@@ -59,23 +59,123 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 	}
 
 	// create a service account for user
-	if err = createServiceAccountForUser(ctx, r.Client, managedCRB); err != nil {
+	if err = r.createServiceAccountForUser(ctx, managedCRB); err != nil {
 		return reconcile.Result{}, err
 	}
 
 	// give user the gateway permission
-	if err = createClusterRoleBindingForUser(ctx, r.Client, managedCRB); err != nil {
+	if err = r.createClusterRoleBindingForUser(ctx, managedCRB); err != nil {
 		return reconcile.Result{}, err
 	}
 
-	if err = createClusterRoleAndClusterRoleBindingToImpersonate(ctx, r.Client, managedCRB); err != nil {
+	if err = r.createClusterRoleAndClusterRoleBindingToImpersonate(ctx, managedCRB); err != nil {
 		return reconcile.Result{}, err
 	}
 
 	return reconcile.Result{}, nil
 }
 
-func createClusterRoleBindingForUser(ctx context.Context, c client.Client, managedCRB *authorizationv1alpha1.ManagedClusterRoleBinding) error {
+func (r *ManagedClusterRoleBindingReconciler) createServiceAccountForUser(ctx context.Context, managedCRB *authorizationv1alpha1.ManagedClusterRoleBinding) error {
+	// create ns to store service-accounts and tokens of users
+	ns := &core.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: common.AddonAgentInstallNamespace,
+		},
+	}
+
+	_, err := cu.CreateOrPatch(context.Background(), r.Client, ns, func(obj client.Object, createOp bool) client.Object {
+		in := obj.(*core.Namespace)
+		in.ObjectMeta = ns.ObjectMeta
+		return in
+	})
+	if err != nil {
+		return err
+	}
+
+	// create service-account for user
+	sa := &core.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ace-sa-" + rand.String(7),
+			Namespace: common.AddonAgentInstallNamespace,
+			Labels:    managedCRB.Labels,
+		},
+	}
+
+	_, err = cu.CreateOrPatch(context.Background(), r.Client, sa, func(obj client.Object, createOp bool) client.Object {
+		in := obj.(*core.ServiceAccount)
+		in.ObjectMeta = sa.ObjectMeta
+		return in
+	})
+	if err != nil {
+		return err
+	}
+
+	secret, err := cu.GetServiceAccountTokenSecret(r.Client, types.NamespacedName{Name: sa.Name, Namespace: sa.Namespace})
+	if err != nil {
+		return err
+	}
+
+	// TODO: remove this part
+	// create a ns to save the kubeconfig
+	ns = &core.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "kc-ns",
+		},
+	}
+	_, err = cu.CreateOrPatch(context.Background(), r.Client, ns, func(obj client.Object, createOp bool) client.Object {
+		in := obj.(*core.Namespace)
+		in.ObjectMeta = ns.ObjectMeta
+		return in
+	})
+	if err != nil {
+		return err
+	}
+
+	token := string(secret.Data["token"])
+	restConfig, err := rest.InClusterConfig()
+	if err != nil {
+		return err
+	}
+	restConfig.BearerToken = token
+	if err != nil {
+		return err
+	}
+
+	usr := &authenticationv1alpha1.User{}
+	if err = r.Client.Get(ctx, types.NamespacedName{Name: managedCRB.Subjects[0].Name}, usr); err != nil {
+		return err
+	}
+
+	restConfig.Impersonate = rest.ImpersonationConfig{
+		UserName: usr.Name,
+	}
+	configBytes, err := clientcmd.BuildKubeConfigBytes(restConfig, "")
+	if err != nil {
+		return err
+	}
+
+	sec := &core.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      managedCRB.Subjects[0].Name + "-kc",
+			Namespace: ns.Name,
+		},
+		Data: map[string][]byte{
+			"kubeconfig": configBytes,
+		},
+	}
+	_, err = cu.CreateOrPatch(context.Background(), r.Client, sec, func(obj client.Object, createOp bool) client.Object {
+		in := obj.(*core.Secret)
+		in.Data = sec.Data
+		return in
+	})
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *ManagedClusterRoleBindingReconciler) createClusterRoleBindingForUser(ctx context.Context, managedCRB *authorizationv1alpha1.ManagedClusterRoleBinding) error {
 	userID, hubOwnerID := utils.GetUserIDAndHubOwnerIDFromLabelValues(managedCRB)
 
 	// name: userID-hubOwnerID-gatewaybinding
@@ -97,7 +197,7 @@ func createClusterRoleBindingForUser(ctx context.Context, c client.Client, manag
 			Name:     common.GatewayProxyClusterRole,
 		},
 	}
-	_, err := cu.CreateOrPatch(ctx, c, crb, func(obj client.Object, createOp bool) client.Object {
+	_, err := cu.CreateOrPatch(ctx, r.Client, crb, func(obj client.Object, createOp bool) client.Object {
 		in := obj.(*rbac.ClusterRoleBinding)
 		in.Subjects = crb.Subjects
 		in.RoleRef = crb.RoleRef
@@ -109,106 +209,7 @@ func createClusterRoleBindingForUser(ctx context.Context, c client.Client, manag
 	return nil
 }
 
-func createServiceAccountForUser(ctx context.Context, c client.Client, managedCRB *authorizationv1alpha1.ManagedClusterRoleBinding) error {
-	// create ns to store service-accounts and tokens of users
-	ns := &core.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: common.AddonAgentInstallNamespace,
-		},
-	}
-
-	_, err := cu.CreateOrPatch(context.Background(), c, ns, func(obj client.Object, createOp bool) client.Object {
-		in := obj.(*core.Namespace)
-		in.ObjectMeta = ns.ObjectMeta
-		return in
-	})
-	if err != nil {
-		return err
-	}
-
-	// create sa for user
-	sa := &core.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "ace-sa-" + rand.String(7),
-			Namespace: common.AddonAgentInstallNamespace,
-			Labels:    managedCRB.Labels,
-		},
-	}
-	_, err = cu.CreateOrPatch(context.Background(), c, sa, func(obj client.Object, createOp bool) client.Object {
-		in := obj.(*core.ServiceAccount)
-		in.ObjectMeta = sa.ObjectMeta
-		return in
-	})
-	if err != nil {
-		return err
-	}
-
-	secret, err := cu.GetServiceAccountTokenSecret(c, types.NamespacedName{Name: sa.Name, Namespace: sa.Namespace})
-	if err != nil {
-		return err
-	}
-
-	// TODO: remove this part
-	// create a ns to save the kubeconfig
-	ns = &core.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "kc-ns",
-		},
-	}
-	_, err = cu.CreateOrPatch(context.Background(), c, ns, func(obj client.Object, createOp bool) client.Object {
-		in := obj.(*core.Namespace)
-		in.ObjectMeta = ns.ObjectMeta
-		return in
-	})
-	if err != nil {
-		return err
-	}
-
-	token := string(secret.Data["token"])
-	restConfig, err := rest.InClusterConfig()
-	if err != nil {
-		return err
-	}
-	restConfig.BearerToken = token
-	if err != nil {
-		return err
-	}
-
-	usr := &authenticationv1alpha1.User{}
-	if err = c.Get(ctx, types.NamespacedName{Name: managedCRB.Subjects[0].Name}, usr); err != nil {
-		return err
-	}
-
-	restConfig.Impersonate = rest.ImpersonationConfig{
-		UserName: usr.Name,
-	}
-	configBytes, err := clientcmd.BuildKubeConfigBytes(restConfig, "")
-	if err != nil {
-		return err
-	}
-
-	sec := &core.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      managedCRB.Subjects[0].Name + "-kc",
-			Namespace: ns.Name,
-		},
-		Data: map[string][]byte{
-			"kubeconfig": configBytes,
-		},
-	}
-	_, err = cu.CreateOrPatch(context.Background(), c, sec, func(obj client.Object, createOp bool) client.Object {
-		in := obj.(*core.Secret)
-		in.Data = sec.Data
-		return in
-	})
-
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func createClusterRoleAndClusterRoleBindingToImpersonate(ctx context.Context, c client.Client, managedCRB *authorizationv1alpha1.ManagedClusterRoleBinding) error {
+func (r *ManagedClusterRoleBindingReconciler) createClusterRoleAndClusterRoleBindingToImpersonate(ctx context.Context, managedCRB *authorizationv1alpha1.ManagedClusterRoleBinding) error {
 	userID, hubOwnerID := utils.GetUserIDAndHubOwnerIDFromLabelValues(managedCRB)
 	userName := managedCRB.Subjects[0].Name
 	// name: userID-hubOwnerID-randomString
@@ -228,7 +229,7 @@ func createClusterRoleAndClusterRoleBindingToImpersonate(ctx context.Context, c 
 		},
 	}
 
-	_, err := cu.CreateOrPatch(ctx, c, cr, func(obj client.Object, createOp bool) client.Object {
+	_, err := cu.CreateOrPatch(ctx, r.Client, cr, func(obj client.Object, createOp bool) client.Object {
 		in := obj.(*rbac.ClusterRole)
 		in.Rules = cr.Rules
 		return in
@@ -241,7 +242,7 @@ func createClusterRoleAndClusterRoleBindingToImpersonate(ctx context.Context, c 
 	// list sa
 	label := managedCRB.Labels
 	var saList core.ServiceAccountList
-	if err = c.List(ctx, &saList, client.MatchingLabelsSelector{
+	if err = r.Client.List(ctx, &saList, client.MatchingLabelsSelector{
 		Selector: labels.SelectorFromSet(label),
 	}); err != nil {
 		return err
@@ -268,7 +269,7 @@ func createClusterRoleAndClusterRoleBindingToImpersonate(ctx context.Context, c 
 		},
 	}
 
-	_, err = cu.CreateOrPatch(context.Background(), c, crb, func(obj client.Object, createOp bool) client.Object {
+	_, err = cu.CreateOrPatch(context.Background(), r.Client, crb, func(obj client.Object, createOp bool) client.Object {
 		in := obj.(*rbac.ClusterRoleBinding)
 		in.Subjects = crb.Subjects
 		in.RoleRef = crb.RoleRef

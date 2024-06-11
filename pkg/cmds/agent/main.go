@@ -123,6 +123,7 @@ func NewCmdAgent() *cobra.Command {
 			if err := (&controller.ManagedClusterRoleBindingReconciler{
 				HubClient:   hubManager.GetClient(),
 				SpokeClient: mgr.GetClient(),
+				Scheme:      mgr.GetScheme(),
 			}).SetupWithManager(hubManager); err != nil {
 				setupLog.Error(err, "unable to create controller", "controller", "ManagedClusterRoleBindingReconciler")
 				os.Exit(1)
@@ -132,6 +133,7 @@ func NewCmdAgent() *cobra.Command {
 				HubClient:   hubManager.GetClient(),
 				SpokeClient: mgr.GetClient(),
 				ClusterName: spokeClusterName,
+				Scheme:      mgr.GetScheme(),
 			}).SetupWithManager(hubManager); err != nil {
 				setupLog.Error(err, "unable to create controller", "controller", "ManagedClusterRoleReconciler")
 				os.Exit(1)

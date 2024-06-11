@@ -25,6 +25,7 @@ import (
 
 	rbac "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	cu "kmodules.xyz/client-go/client"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -37,6 +38,7 @@ import (
 type ManagedClusterRoleBindingReconciler struct {
 	HubClient   client.Client
 	SpokeClient client.Client
+	Scheme      *runtime.Scheme
 }
 
 //+kubebuilder:rbac:groups=authorization.k8s.appscode.com,resources=managedclusterrolebindings,verbs=get;list;watch;create;update;patch;delete
@@ -64,7 +66,7 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 	userName := managedCRB.Subjects[0].Name
 
 	// impersonate clusterRole
-	clusterRole := &rbac.ClusterRole{
+	cr := &rbac.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   fmt.Sprintf("impersonate-%s-%s", userName, hubOwnerID),
 			Labels: managedCRB.Labels,
@@ -79,9 +81,9 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 		},
 	}
 
-	_, err := cu.CreateOrPatch(context.Background(), r.SpokeClient, clusterRole, func(obj client.Object, createOp bool) client.Object {
+	_, err := cu.CreateOrPatch(context.Background(), r.SpokeClient, cr, func(obj client.Object, createOp bool) client.Object {
 		in := obj.(*rbac.ClusterRole)
-		in.Rules = clusterRole.Rules
+		in.Rules = cr.Rules
 		return in
 	})
 	if err != nil {
@@ -105,7 +107,7 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 		RoleRef: rbac.RoleRef{
 			APIGroup: rbac.GroupName,
 			Kind:     "ClusterRole",
-			Name:     clusterRole.Name,
+			Name:     cr.Name,
 		},
 	}
 
@@ -145,7 +147,6 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 				Name:     managedCRB.RoleRef.Name,
 			},
 		}
-
 		_, err = cu.CreateOrPatch(context.Background(), r.SpokeClient, givenClusterRolebinding, func(obj client.Object, createOp bool) client.Object {
 			in := obj.(*rbac.ClusterRoleBinding)
 			in.Subjects = givenClusterRolebinding.Subjects
