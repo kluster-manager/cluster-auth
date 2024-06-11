@@ -21,14 +21,18 @@ import (
 	"fmt"
 
 	authzv1alpah1 "github.com/kluster-manager/cluster-auth/apis/authorization/v1alpha1"
+	"github.com/kluster-manager/cluster-auth/pkg/common"
 	"github.com/kluster-manager/cluster-auth/pkg/utils"
 
+	core "k8s.io/api/core/v1"
 	rbac "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	cu "kmodules.xyz/client-go/client"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -64,6 +68,27 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 	}
 	_, hubOwnerID := utils.GetUserIDAndHubOwnerIDFromLabelValues(&managedCRB)
 	userName := managedCRB.Subjects[0].Name
+
+	// Check if the managedCRB is marked for deletion
+	if managedCRB.GetDeletionTimestamp() != nil {
+		if controllerutil.ContainsFinalizer(&managedCRB, common.SpokeAuthorizationFinalizer) {
+			// Perform cleanup logic, e.g., delete related resources
+			if err := r.deleteAssociatedResources(&managedCRB); err != nil {
+				return reconcile.Result{}, err
+			}
+			// Remove the finalizer
+			controllerutil.RemoveFinalizer(&managedCRB, common.SpokeAuthorizationFinalizer)
+			if err := r.SpokeClient.Update(context.TODO(), &managedCRB); err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+		return reconcile.Result{}, nil
+	}
+
+	// Add finalizer if not present
+	if err := r.addFinalizerIfNeeded(&managedCRB); err != nil {
+		return reconcile.Result{}, err
+	}
 
 	// impersonate clusterRole
 	cr := &rbac.ClusterRole{
@@ -188,6 +213,57 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 		}
 	}
 	return reconcile.Result{}, nil
+}
+
+// AddFinalizerIfNeeded adds a finalizer to the CRD instance if it doesn't already have one
+func (r *ManagedClusterRoleBindingReconciler) addFinalizerIfNeeded(managedCRB *authzv1alpah1.ManagedClusterRoleBinding) error {
+	if !controllerutil.ContainsFinalizer(managedCRB, common.SpokeAuthorizationFinalizer) {
+		controllerutil.AddFinalizer(managedCRB, common.SpokeAuthorizationFinalizer)
+		if err := r.SpokeClient.Update(context.TODO(), managedCRB); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *ManagedClusterRoleBindingReconciler) deleteAssociatedResources(managedCRB *authzv1alpah1.ManagedClusterRoleBinding) error {
+	saList := core.ServiceAccountList{}
+	err := r.SpokeClient.List(context.TODO(), &saList, client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(managedCRB.Labels),
+	})
+	if err == nil {
+		for _, sa := range saList.Items {
+			if err := r.SpokeClient.Delete(context.TODO(), &sa); err != nil {
+				return err
+			}
+		}
+	}
+
+	crList := rbac.ClusterRoleList{}
+	err = r.SpokeClient.List(context.TODO(), &crList, client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(managedCRB.Labels),
+	})
+	if err == nil {
+		for _, cr := range crList.Items {
+			if err := r.SpokeClient.Delete(context.TODO(), &cr); err != nil {
+				return err
+			}
+		}
+	}
+
+	crbList := rbac.ClusterRoleBindingList{}
+	err = r.SpokeClient.List(context.TODO(), &crbList, client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(managedCRB.Labels),
+	})
+	if err == nil {
+		for _, crb := range crbList.Items {
+			if err := r.SpokeClient.Delete(context.TODO(), &crb); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

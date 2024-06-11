@@ -37,6 +37,7 @@ import (
 	"kmodules.xyz/client-go/tools/clientcmd"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -55,6 +56,27 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 	managedCRB := &authorizationv1alpha1.ManagedClusterRoleBinding{}
 	err := r.Client.Get(ctx, req.NamespacedName, managedCRB)
 	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Check if the managedCRB is marked for deletion
+	if managedCRB.GetDeletionTimestamp() != nil {
+		if controllerutil.ContainsFinalizer(managedCRB, common.HubAuthorizationFinalizer) {
+			// Perform cleanup logic, e.g., delete related resources
+			if err := r.deleteAssociatedResources(managedCRB); err != nil {
+				return reconcile.Result{}, err
+			}
+			// Remove the finalizer
+			controllerutil.RemoveFinalizer(managedCRB, common.HubAuthorizationFinalizer)
+			if err := r.Client.Update(context.TODO(), managedCRB); err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+		return reconcile.Result{}, nil
+	}
+
+	// Add finalizer if not present
+	if err := r.addFinalizerIfNeeded(managedCRB); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -277,6 +299,57 @@ func (r *ManagedClusterRoleBindingReconciler) createClusterRoleAndClusterRoleBin
 	})
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// AddFinalizerIfNeeded adds a finalizer to the CRD instance if it doesn't already have one
+func (r *ManagedClusterRoleBindingReconciler) addFinalizerIfNeeded(managedCRB *authorizationv1alpha1.ManagedClusterRoleBinding) error {
+	if !controllerutil.ContainsFinalizer(managedCRB, common.HubAuthorizationFinalizer) {
+		controllerutil.AddFinalizer(managedCRB, common.HubAuthorizationFinalizer)
+		if err := r.Client.Update(context.TODO(), managedCRB); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *ManagedClusterRoleBindingReconciler) deleteAssociatedResources(managedCRB *authorizationv1alpha1.ManagedClusterRoleBinding) error {
+	saList := core.ServiceAccountList{}
+	err := r.Client.List(context.TODO(), &saList, client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(managedCRB.Labels),
+	})
+	if err == nil {
+		for _, sa := range saList.Items {
+			if err := r.Client.Delete(context.TODO(), &sa); err != nil {
+				return err
+			}
+		}
+	}
+
+	crList := rbac.ClusterRoleList{}
+	err = r.Client.List(context.TODO(), &crList, client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(managedCRB.Labels),
+	})
+	if err == nil {
+		for _, cr := range crList.Items {
+			if err := r.Client.Delete(context.TODO(), &cr); err != nil {
+				return err
+			}
+		}
+	}
+
+	crbList := rbac.ClusterRoleBindingList{}
+	err = r.Client.List(context.TODO(), &crbList, client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(managedCRB.Labels),
+	})
+	if err == nil {
+		for _, crb := range crbList.Items {
+			if err := r.Client.Delete(context.TODO(), &crb); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil

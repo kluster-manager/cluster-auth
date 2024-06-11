@@ -17,10 +17,14 @@ limitations under the License.
 package common
 
 const (
-	AddonName                  = "cluster-auth"
-	AgentName                  = "cluster-auth"
-	AddonAgentInstallNamespace = "open-cluster-management-" + AddonName
-	AgentManifestsDir          = "agent-manifests/" + AddonName
-	GatewayProxyClusterRole    = "open-cluster-management:cluster-gateway:proxy"
-	HubKubeconfigSecretName    = "cluster-auth-hub-kubeconfig"
+	AddonName                   = "cluster-auth"
+	AgentName                   = "cluster-auth"
+	AddonAgentInstallNamespace  = "open-cluster-management-" + AddonName
+	AgentManifestsDir           = "agent-manifests/" + AddonName
+	GatewayProxyClusterRole     = "open-cluster-management:cluster-gateway:proxy"
+	HubKubeconfigSecretName     = "cluster-auth-hub-kubeconfig"
+	HubAuthorizationFinalizer   = "authorization.hub.appscode.com"
+	SpokeAuthorizationFinalizer = "authorization.spoke.appscode.com"
+	UserAuthLabel               = "authentication.k8s.appscode.com/user"
+	HubOwnerLabel               = "authentication.k8s.appscode.com/hub-owner"
 )
