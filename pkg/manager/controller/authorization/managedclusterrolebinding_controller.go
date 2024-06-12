@@ -18,9 +18,9 @@ package authorization
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
-	authenticationv1alpha1 "github.com/kluster-manager/cluster-auth/apis/authentication/v1alpha1"
 	authorizationv1alpha1 "github.com/kluster-manager/cluster-auth/apis/authorization/v1alpha1"
 	"github.com/kluster-manager/cluster-auth/pkg/common"
 	"github.com/kluster-manager/cluster-auth/pkg/utils"
@@ -32,9 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/client-go/rest"
 	cu "kmodules.xyz/client-go/client"
-	"kmodules.xyz/client-go/tools/clientcmd"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -115,15 +113,21 @@ func (r *ManagedClusterRoleBindingReconciler) createServiceAccountForUser(ctx co
 	}
 
 	// create service-account for user
-	sa := &core.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "ace-sa-" + rand.String(7),
-			Namespace: common.AddonAgentInstallNamespace,
-			Labels:    managedCRB.Labels,
-		},
+	var saList core.ServiceAccountList
+	_ = r.Client.List(ctx, &saList, client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(managedCRB.Labels),
+	})
+
+	sa := core.ServiceAccount{}
+	if len(saList.Items) == 0 {
+		sa.Name = "ace-sa-" + rand.String(7)
+		sa.Namespace = common.AddonAgentInstallNamespace
+		sa.Labels = managedCRB.Labels
+	} else {
+		sa = saList.Items[0]
 	}
 
-	_, err = cu.CreateOrPatch(context.Background(), r.Client, sa, func(obj client.Object, createOp bool) client.Object {
+	_, err = cu.CreateOrPatch(context.Background(), r.Client, &sa, func(obj client.Object, createOp bool) client.Object {
 		in := obj.(*core.ServiceAccount)
 		in.ObjectMeta = sa.ObjectMeta
 		return in
@@ -132,68 +136,11 @@ func (r *ManagedClusterRoleBindingReconciler) createServiceAccountForUser(ctx co
 		return err
 	}
 
-	secret, err := cu.GetServiceAccountTokenSecret(r.Client, types.NamespacedName{Name: sa.Name, Namespace: sa.Namespace})
+	_, err = cu.GetServiceAccountTokenSecret(r.Client, types.NamespacedName{Name: sa.Name, Namespace: sa.Namespace})
 	if err != nil {
 		return err
 	}
 
-	// TODO: remove this part
-	// create a ns to save the kubeconfig
-	ns = &core.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "kc-ns",
-		},
-	}
-	_, err = cu.CreateOrPatch(context.Background(), r.Client, ns, func(obj client.Object, createOp bool) client.Object {
-		in := obj.(*core.Namespace)
-		in.ObjectMeta = ns.ObjectMeta
-		return in
-	})
-	if err != nil {
-		return err
-	}
-
-	token := string(secret.Data["token"])
-	restConfig, err := rest.InClusterConfig()
-	if err != nil {
-		return err
-	}
-	restConfig.BearerToken = token
-	if err != nil {
-		return err
-	}
-
-	usr := &authenticationv1alpha1.User{}
-	if err = r.Client.Get(ctx, types.NamespacedName{Name: managedCRB.Subjects[0].Name}, usr); err != nil {
-		return err
-	}
-
-	restConfig.Impersonate = rest.ImpersonationConfig{
-		UserName: usr.Name,
-	}
-	configBytes, err := clientcmd.BuildKubeConfigBytes(restConfig, "")
-	if err != nil {
-		return err
-	}
-
-	sec := &core.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      managedCRB.Subjects[0].Name + "-kc",
-			Namespace: ns.Name,
-		},
-		Data: map[string][]byte{
-			"kubeconfig": configBytes,
-		},
-	}
-	_, err = cu.CreateOrPatch(context.Background(), r.Client, sec, func(obj client.Object, createOp bool) client.Object {
-		in := obj.(*core.Secret)
-		in.Data = sec.Data
-		return in
-	})
-
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -201,10 +148,12 @@ func (r *ManagedClusterRoleBindingReconciler) createClusterRoleBindingForUser(ct
 	userID, hubOwnerID := utils.GetUserIDAndHubOwnerIDFromLabelValues(managedCRB)
 
 	// name: userID-hubOwnerID-gatewaybinding
-	crb := &rbac.ClusterRoleBinding{
+	crb := rbac.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   fmt.Sprintf("ace-user-%s-%s-gatewaybinding", userID, hubOwnerID),
-			Labels: managedCRB.Labels,
+			Name: fmt.Sprintf("%s-%s-gatewaybinding", userID, hubOwnerID),
+			Labels: map[string]string{
+				common.UserAuthLabel: userID, // TODO: remove this cluster-rolebinding when user object is deleted from hub
+			},
 		},
 		Subjects: []rbac.Subject{
 			{
@@ -219,7 +168,16 @@ func (r *ManagedClusterRoleBindingReconciler) createClusterRoleBindingForUser(ct
 			Name:     common.GatewayProxyClusterRole,
 		},
 	}
-	_, err := cu.CreateOrPatch(ctx, r.Client, crb, func(obj client.Object, createOp bool) client.Object {
+
+	crbList := &rbac.ClusterRoleBindingList{}
+	_ = r.Client.List(ctx, crbList, client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(managedCRB.Labels),
+	})
+
+	if len(crbList.Items) > 0 {
+		crb = crbList.Items[0]
+	}
+	_, err := cu.CreateOrPatch(ctx, r.Client, &crb, func(obj client.Object, createOp bool) client.Object {
 		in := obj.(*rbac.ClusterRoleBinding)
 		in.Subjects = crb.Subjects
 		in.RoleRef = crb.RoleRef
@@ -236,9 +194,9 @@ func (r *ManagedClusterRoleBindingReconciler) createClusterRoleAndClusterRoleBin
 	userName := managedCRB.Subjects[0].Name
 	// name: userID-hubOwnerID-randomString
 	// impersonate clusterRole
-	cr := &rbac.ClusterRole{
+	cr := rbac.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   fmt.Sprintf("ace-user-%s-%s-%s", userID, hubOwnerID, rand.String(7)),
+			Name:   fmt.Sprintf("%s-%s-%s", userID, hubOwnerID, rand.String(7)),
 			Labels: managedCRB.Labels,
 		},
 		Rules: []rbac.PolicyRule{
@@ -251,8 +209,17 @@ func (r *ManagedClusterRoleBindingReconciler) createClusterRoleAndClusterRoleBin
 		},
 	}
 
-	_, err := cu.CreateOrPatch(ctx, r.Client, cr, func(obj client.Object, createOp bool) client.Object {
+	crList := &rbac.ClusterRoleList{}
+	_ = r.Client.List(ctx, crList, client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(managedCRB.Labels),
+	})
+
+	if len(crList.Items) > 0 {
+		cr = crList.Items[0]
+	}
+	_, err := cu.CreateOrPatch(ctx, r.Client, &cr, func(obj client.Object, createOp bool) client.Object {
 		in := obj.(*rbac.ClusterRole)
+		in.ObjectMeta = cr.ObjectMeta
 		in.Rules = cr.Rules
 		return in
 	})
@@ -261,15 +228,14 @@ func (r *ManagedClusterRoleBindingReconciler) createClusterRoleAndClusterRoleBin
 	}
 
 	// now give the service-account permission to impersonate user
-	// list sa
-	label := managedCRB.Labels
 	var saList core.ServiceAccountList
-	if err = r.Client.List(ctx, &saList, client.MatchingLabelsSelector{
-		Selector: labels.SelectorFromSet(label),
-	}); err != nil {
-		return err
-	}
+	_ = r.Client.List(ctx, &saList, client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(managedCRB.Labels),
+	})
 
+	if len(saList.Items) == 0 {
+		return errors.New("service account not found")
+	}
 	sub := []rbac.Subject{
 		{
 			APIGroup:  "",
@@ -278,9 +244,10 @@ func (r *ManagedClusterRoleBindingReconciler) createClusterRoleAndClusterRoleBin
 			Namespace: common.AddonAgentInstallNamespace,
 		},
 	}
-	crb := &rbac.ClusterRoleBinding{
+
+	crb := rbac.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   fmt.Sprintf("ace-user-%s-%s-%s", userID, hubOwnerID, rand.String(7)),
+			Name:   cr.Name, // creating cluster-rolebinding name with the same name of cluster-role
 			Labels: managedCRB.Labels,
 		},
 		Subjects: sub,
@@ -291,8 +258,18 @@ func (r *ManagedClusterRoleBindingReconciler) createClusterRoleAndClusterRoleBin
 		},
 	}
 
-	_, err = cu.CreateOrPatch(context.Background(), r.Client, crb, func(obj client.Object, createOp bool) client.Object {
+	crbList := &rbac.ClusterRoleBindingList{}
+	_ = r.Client.List(ctx, crbList, client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(managedCRB.Labels),
+	})
+
+	if len(crbList.Items) > 0 {
+		crb = crbList.Items[0]
+	}
+
+	_, err = cu.CreateOrPatch(context.Background(), r.Client, &crb, func(obj client.Object, createOp bool) client.Object {
 		in := obj.(*rbac.ClusterRoleBinding)
+		in.ObjectMeta = crb.ObjectMeta
 		in.Subjects = crb.Subjects
 		in.RoleRef = crb.RoleRef
 		return in

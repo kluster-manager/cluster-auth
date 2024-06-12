@@ -23,7 +23,6 @@ import (
 
 	rbac "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	cu "kmodules.xyz/client-go/client"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -37,7 +36,6 @@ type ManagedClusterRoleReconciler struct {
 	HubClient   client.Client
 	SpokeClient client.Client
 	ClusterName string
-	Scheme      *runtime.Scheme
 }
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to

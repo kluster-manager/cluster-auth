@@ -24,11 +24,10 @@ import (
 	"github.com/kluster-manager/cluster-auth/pkg/common"
 	"github.com/kluster-manager/cluster-auth/pkg/utils"
 
-	core "k8s.io/api/core/v1"
 	rbac "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/rand"
 	cu "kmodules.xyz/client-go/client"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,7 +41,6 @@ import (
 type ManagedClusterRoleBindingReconciler struct {
 	HubClient   client.Client
 	SpokeClient client.Client
-	Scheme      *runtime.Scheme
 }
 
 //+kubebuilder:rbac:groups=authorization.k8s.appscode.com,resources=managedclusterrolebindings,verbs=get;list;watch;create;update;patch;delete
@@ -78,7 +76,7 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 			}
 			// Remove the finalizer
 			controllerutil.RemoveFinalizer(&managedCRB, common.SpokeAuthorizationFinalizer)
-			if err := r.SpokeClient.Update(context.TODO(), &managedCRB); err != nil {
+			if err := r.HubClient.Update(context.TODO(), &managedCRB); err != nil {
 				return reconcile.Result{}, err
 			}
 		}
@@ -91,9 +89,9 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 	}
 
 	// impersonate clusterRole
-	cr := &rbac.ClusterRole{
+	cr := rbac.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   fmt.Sprintf("impersonate-%s-%s", userName, hubOwnerID),
+			Name:   fmt.Sprintf("impersonate-%s-%s-%s", userName, hubOwnerID, rand.String(7)),
 			Labels: managedCRB.Labels,
 		},
 		Rules: []rbac.PolicyRule{
@@ -106,7 +104,16 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 		},
 	}
 
-	_, err := cu.CreateOrPatch(context.Background(), r.SpokeClient, cr, func(obj client.Object, createOp bool) client.Object {
+	crList := &rbac.ClusterRoleList{}
+	_ = r.SpokeClient.List(ctx, crList, client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(managedCRB.Labels),
+	})
+
+	if len(crList.Items) > 0 {
+		cr = crList.Items[0]
+	}
+
+	_, err := cu.CreateOrPatch(context.Background(), r.SpokeClient, &cr, func(obj client.Object, createOp bool) client.Object {
 		in := obj.(*rbac.ClusterRole)
 		in.Rules = cr.Rules
 		return in
@@ -116,9 +123,9 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 	}
 
 	// this clusterRoleBinding will give permission to the user
-	crb := &rbac.ClusterRoleBinding{
+	crb := rbac.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   fmt.Sprintf("impersonate-%s-%s-rolebinding", userName, hubOwnerID),
+			Name:   cr.Name,
 			Labels: managedCRB.Labels,
 		},
 		Subjects: []rbac.Subject{
@@ -136,7 +143,16 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 		},
 	}
 
-	_, err = cu.CreateOrPatch(context.Background(), r.SpokeClient, crb, func(obj client.Object, createOp bool) client.Object {
+	crbList := &rbac.ClusterRoleBindingList{}
+	_ = r.SpokeClient.List(ctx, crbList, client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(managedCRB.Labels),
+	})
+
+	if len(crbList.Items) > 0 {
+		crb = crbList.Items[0]
+	}
+
+	_, err = cu.CreateOrPatch(context.Background(), r.SpokeClient, &crb, func(obj client.Object, createOp bool) client.Object {
 		in := obj.(*rbac.ClusterRoleBinding)
 		in.Subjects = crb.Subjects
 		in.RoleRef = crb.RoleRef
@@ -219,7 +235,7 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 func (r *ManagedClusterRoleBindingReconciler) addFinalizerIfNeeded(managedCRB *authzv1alpah1.ManagedClusterRoleBinding) error {
 	if !controllerutil.ContainsFinalizer(managedCRB, common.SpokeAuthorizationFinalizer) {
 		controllerutil.AddFinalizer(managedCRB, common.SpokeAuthorizationFinalizer)
-		if err := r.SpokeClient.Update(context.TODO(), managedCRB); err != nil {
+		if err := r.HubClient.Update(context.TODO(), managedCRB); err != nil {
 			return err
 		}
 	}
@@ -227,20 +243,8 @@ func (r *ManagedClusterRoleBindingReconciler) addFinalizerIfNeeded(managedCRB *a
 }
 
 func (r *ManagedClusterRoleBindingReconciler) deleteAssociatedResources(managedCRB *authzv1alpah1.ManagedClusterRoleBinding) error {
-	saList := core.ServiceAccountList{}
-	err := r.SpokeClient.List(context.TODO(), &saList, client.MatchingLabelsSelector{
-		Selector: labels.SelectorFromSet(managedCRB.Labels),
-	})
-	if err == nil {
-		for _, sa := range saList.Items {
-			if err := r.SpokeClient.Delete(context.TODO(), &sa); err != nil {
-				return err
-			}
-		}
-	}
-
 	crList := rbac.ClusterRoleList{}
-	err = r.SpokeClient.List(context.TODO(), &crList, client.MatchingLabelsSelector{
+	err := r.SpokeClient.List(context.TODO(), &crList, client.MatchingLabelsSelector{
 		Selector: labels.SelectorFromSet(managedCRB.Labels),
 	})
 	if err == nil {
@@ -258,6 +262,18 @@ func (r *ManagedClusterRoleBindingReconciler) deleteAssociatedResources(managedC
 	if err == nil {
 		for _, crb := range crbList.Items {
 			if err := r.SpokeClient.Delete(context.TODO(), &crb); err != nil {
+				return err
+			}
+		}
+	}
+
+	rbList := rbac.RoleBindingList{}
+	err = r.SpokeClient.List(context.TODO(), &rbList, client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(managedCRB.Labels),
+	})
+	if err == nil {
+		for _, rb := range rbList.Items {
+			if err := r.SpokeClient.Delete(context.TODO(), &rb); err != nil {
 				return err
 			}
 		}

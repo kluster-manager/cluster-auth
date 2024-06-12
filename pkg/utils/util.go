@@ -1,6 +1,8 @@
 package utils
 
-import authorizationv1alpha1 "github.com/kluster-manager/cluster-auth/apis/authorization/v1alpha1"
+import (
+	authorizationv1alpha1 "github.com/kluster-manager/cluster-auth/apis/authorization/v1alpha1"
+)
 
 func GetUserIDAndHubOwnerIDFromLabelValues(object *authorizationv1alpha1.ManagedClusterRoleBinding) (string, string) {
 	labels := object.GetLabels()
@@ -10,7 +12,7 @@ func GetUserIDAndHubOwnerIDFromLabelValues(object *authorizationv1alpha1.Managed
 		userID = labelValue
 	}
 	if labelValue, ok := labels["authentication.k8s.appscode.com/hub-owner"]; ok {
-		userID = labelValue
+		hubOwnerID = labelValue
 	}
 
 	return userID, hubOwnerID
