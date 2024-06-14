@@ -18,14 +18,20 @@ package controller
 
 import (
 	"context"
+	"fmt"
 
 	authzv1alpah1 "github.com/kluster-manager/cluster-auth/apis/authorization/v1alpha1"
+	"github.com/kluster-manager/cluster-auth/pkg/common"
+	"github.com/kluster-manager/cluster-auth/pkg/utils"
 
 	rbac "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/rand"
 	cu "kmodules.xyz/client-go/client"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -58,13 +64,35 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 	if err := r.HubClient.Get(ctx, req.NamespacedName, &managedCRB); err != nil {
 		return reconcile.Result{}, err
 	}
-
+	_, hubOwnerID := utils.GetUserIDAndHubOwnerIDFromLabelValues(&managedCRB)
 	userName := managedCRB.Subjects[0].Name
 
+	// Check if the managedCRB is marked for deletion
+	if managedCRB.GetDeletionTimestamp() != nil {
+		if controllerutil.ContainsFinalizer(&managedCRB, common.SpokeAuthorizationFinalizer) {
+			// Perform cleanup logic, e.g., delete related resources
+			if err := r.deleteAssociatedResources(&managedCRB); err != nil {
+				return reconcile.Result{}, err
+			}
+			// Remove the finalizer
+			controllerutil.RemoveFinalizer(&managedCRB, common.SpokeAuthorizationFinalizer)
+			if err := r.HubClient.Update(context.TODO(), &managedCRB); err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+		return reconcile.Result{}, nil
+	}
+
+	// Add finalizer if not present
+	if err := r.addFinalizerIfNeeded(&managedCRB); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	// impersonate clusterRole
-	clusterRole := &rbac.ClusterRole{
+	cr := rbac.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "impersonate-" + userName,
+			Name:   fmt.Sprintf("impersonate-%s-%s-%s", userName, hubOwnerID, rand.String(7)),
+			Labels: managedCRB.Labels,
 		},
 		Rules: []rbac.PolicyRule{
 			{
@@ -76,9 +104,18 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 		},
 	}
 
-	_, err := cu.CreateOrPatch(context.Background(), r.SpokeClient, clusterRole, func(obj client.Object, createOp bool) client.Object {
+	crList := &rbac.ClusterRoleList{}
+	_ = r.SpokeClient.List(ctx, crList, client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(managedCRB.Labels),
+	})
+
+	if len(crList.Items) > 0 {
+		cr = crList.Items[0]
+	}
+
+	_, err := cu.CreateOrPatch(context.Background(), r.SpokeClient, &cr, func(obj client.Object, createOp bool) client.Object {
 		in := obj.(*rbac.ClusterRole)
-		in.Rules = clusterRole.Rules
+		in.Rules = cr.Rules
 		return in
 	})
 	if err != nil {
@@ -86,9 +123,10 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 	}
 
 	// this clusterRoleBinding will give permission to the user
-	crb := &rbac.ClusterRoleBinding{
+	crb := rbac.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "impersonate-" + userName + "-rolebinding",
+			Name:   cr.Name,
+			Labels: managedCRB.Labels,
 		},
 		Subjects: []rbac.Subject{
 			{
@@ -101,11 +139,20 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 		RoleRef: rbac.RoleRef{
 			APIGroup: rbac.GroupName,
 			Kind:     "ClusterRole",
-			Name:     "impersonate-" + userName,
+			Name:     cr.Name,
 		},
 	}
 
-	_, err = cu.CreateOrPatch(context.Background(), r.SpokeClient, crb, func(obj client.Object, createOp bool) client.Object {
+	crbList := &rbac.ClusterRoleBindingList{}
+	_ = r.SpokeClient.List(ctx, crbList, client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(managedCRB.Labels),
+	})
+
+	if len(crbList.Items) > 0 {
+		crb = crbList.Items[0]
+	}
+
+	_, err = cu.CreateOrPatch(context.Background(), r.SpokeClient, &crb, func(obj client.Object, createOp bool) client.Object {
 		in := obj.(*rbac.ClusterRoleBinding)
 		in.Subjects = crb.Subjects
 		in.RoleRef = crb.RoleRef
@@ -115,6 +162,7 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 		return reconcile.Result{}, err
 	}
 
+	// now give actual permission to the User
 	sub := []rbac.Subject{
 		{
 			APIGroup: "",
@@ -130,10 +178,8 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 				Kind:       "ClusterRoleBinding",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name: managedCRB.Name,
-				Labels: map[string]string{
-					"authentication.k8s.appscode.com/username": managedCRB.Subjects[0].Name,
-				},
+				Name:   managedCRB.Name,
+				Labels: managedCRB.Labels,
 			},
 			Subjects: sub,
 			RoleRef: rbac.RoleRef{
@@ -142,7 +188,6 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 				Name:     managedCRB.RoleRef.Name,
 			},
 		}
-
 		_, err = cu.CreateOrPatch(context.Background(), r.SpokeClient, givenClusterRolebinding, func(obj client.Object, createOp bool) client.Object {
 			in := obj.(*rbac.ClusterRoleBinding)
 			in.Subjects = givenClusterRolebinding.Subjects
@@ -153,37 +198,88 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 			return reconcile.Result{}, err
 		}
 	} else {
-		givenRolebinding := &rbac.RoleBinding{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: rbac.SchemeGroupVersion.String(),
-				Kind:       "RoleBinding",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      managedCRB.Name,
-				Namespace: managedCRB.Namespace,
-				Labels: map[string]string{
-					"authentication.k8s.appscode.com/username": managedCRB.Subjects[0].Name,
+		for _, ns := range managedCRB.RoleRef.Namespaces {
+			givenRolebinding := &rbac.RoleBinding{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: rbac.SchemeGroupVersion.String(),
+					Kind:       "RoleBinding",
 				},
-			},
-			Subjects: sub,
-			RoleRef: rbac.RoleRef{
-				APIGroup: rbac.GroupName,
-				Kind:     "Role",
-				Name:     managedCRB.RoleRef.Name,
-			},
-		}
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      managedCRB.Name,
+					Namespace: ns,
+					Labels:    managedCRB.Labels,
+				},
+				Subjects: sub,
+				RoleRef: rbac.RoleRef{
+					APIGroup: rbac.GroupName,
+					Kind:     "Role",
+					Name:     managedCRB.RoleRef.Name,
+				},
+			}
 
-		_, err = cu.CreateOrPatch(context.Background(), r.SpokeClient, givenRolebinding, func(obj client.Object, createOp bool) client.Object {
-			in := obj.(*rbac.RoleBinding)
-			in.Subjects = givenRolebinding.Subjects
-			in.RoleRef = givenRolebinding.RoleRef
-			return in
-		})
-		if err != nil {
-			return reconcile.Result{}, err
+			_, err = cu.CreateOrPatch(context.Background(), r.SpokeClient, givenRolebinding, func(obj client.Object, createOp bool) client.Object {
+				in := obj.(*rbac.RoleBinding)
+				in.Subjects = givenRolebinding.Subjects
+				in.RoleRef = givenRolebinding.RoleRef
+				return in
+			})
+			if err != nil {
+				return reconcile.Result{}, err
+			}
 		}
 	}
 	return reconcile.Result{}, nil
+}
+
+// AddFinalizerIfNeeded adds a finalizer to the CRD instance if it doesn't already have one
+func (r *ManagedClusterRoleBindingReconciler) addFinalizerIfNeeded(managedCRB *authzv1alpah1.ManagedClusterRoleBinding) error {
+	if !controllerutil.ContainsFinalizer(managedCRB, common.SpokeAuthorizationFinalizer) {
+		controllerutil.AddFinalizer(managedCRB, common.SpokeAuthorizationFinalizer)
+		if err := r.HubClient.Update(context.TODO(), managedCRB); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *ManagedClusterRoleBindingReconciler) deleteAssociatedResources(managedCRB *authzv1alpah1.ManagedClusterRoleBinding) error {
+	crList := rbac.ClusterRoleList{}
+	err := r.SpokeClient.List(context.TODO(), &crList, client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(managedCRB.Labels),
+	})
+	if err == nil {
+		for _, cr := range crList.Items {
+			if err := r.SpokeClient.Delete(context.TODO(), &cr); err != nil {
+				return err
+			}
+		}
+	}
+
+	crbList := rbac.ClusterRoleBindingList{}
+	err = r.SpokeClient.List(context.TODO(), &crbList, client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(managedCRB.Labels),
+	})
+	if err == nil {
+		for _, crb := range crbList.Items {
+			if err := r.SpokeClient.Delete(context.TODO(), &crb); err != nil {
+				return err
+			}
+		}
+	}
+
+	rbList := rbac.RoleBindingList{}
+	err = r.SpokeClient.List(context.TODO(), &rbList, client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(managedCRB.Labels),
+	})
+	if err == nil {
+		for _, rb := range rbList.Items {
+			if err := r.SpokeClient.Delete(context.TODO(), &rb); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

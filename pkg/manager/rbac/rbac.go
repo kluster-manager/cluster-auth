@@ -56,12 +56,12 @@ func SetupPermission(kubeConfig *rest.Config, agentName string) agent.Permission
 			Rules: []rbacv1.PolicyRule{
 				{
 					APIGroups: []string{"authorization.k8s.appscode.com"},
-					Verbs:     []string{"get", "list", "watch"},
+					Verbs:     []string{"get", "list", "watch", "create", "update", "delete", "patch"},
 					Resources: []string{"managedclusterrolebindings"},
 				},
 				{
 					APIGroups: []string{"authorization.k8s.appscode.com"},
-					Verbs:     []string{"get", "list", "watch"},
+					Verbs:     []string{"get", "list", "watch", "create", "update", "delete", "patch"},
 					Resources: []string{"managedclusterroles"},
 				},
 			},
