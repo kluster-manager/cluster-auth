@@ -20,8 +20,10 @@ import (
 	"context"
 
 	authorizationv1alpha1 "github.com/kluster-manager/cluster-auth/apis/authorization/v1alpha1"
+	"github.com/kluster-manager/cluster-auth/pkg/common"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	cu "kmodules.xyz/client-go/client"
@@ -30,6 +32,7 @@ import (
 	clustersdkv1beta2 "open-cluster-management.io/sdk-go/pkg/apis/cluster/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -56,6 +59,27 @@ func (r *ManagedClusterSetRoleBindingReconciler) Reconcile(ctx context.Context, 
 	managedCSRB := &authorizationv1alpha1.ManagedClusterSetRoleBinding{}
 	err := r.Client.Get(ctx, req.NamespacedName, managedCSRB)
 	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Check if the managedCRB is marked for deletion
+	if managedCSRB.GetDeletionTimestamp() != nil {
+		if controllerutil.ContainsFinalizer(managedCSRB, common.HubAuthorizationFinalizer) {
+			// Perform cleanup logic, e.g., delete related resources
+			if err := r.deleteAssociatedResources(managedCSRB); err != nil {
+				return reconcile.Result{}, err
+			}
+			// Remove the finalizer
+			controllerutil.RemoveFinalizer(managedCSRB, common.HubAuthorizationFinalizer)
+			if err := r.Client.Update(context.TODO(), managedCSRB); err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+		return reconcile.Result{}, nil
+	}
+
+	// Add finalizer if not present
+	if err := r.addFinalizerIfNeeded(managedCSRB); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -99,6 +123,33 @@ func (r *ManagedClusterSetRoleBindingReconciler) Reconcile(ctx context.Context, 
 	}
 
 	return reconcile.Result{}, nil
+}
+
+// AddFinalizerIfNeeded adds a finalizer to the CRD instance if it doesn't already have one
+func (r *ManagedClusterSetRoleBindingReconciler) addFinalizerIfNeeded(managedCSRB *authorizationv1alpha1.ManagedClusterSetRoleBinding) error {
+	if !controllerutil.ContainsFinalizer(managedCSRB, common.HubAuthorizationFinalizer) {
+		controllerutil.AddFinalizer(managedCSRB, common.HubAuthorizationFinalizer)
+		if err := r.Client.Update(context.TODO(), managedCSRB); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *ManagedClusterSetRoleBindingReconciler) deleteAssociatedResources(managedCSRB *authorizationv1alpha1.ManagedClusterSetRoleBinding) error {
+	managedClusterRoleBindingList := authorizationv1alpha1.ManagedClusterRoleBindingList{}
+	err := r.Client.List(context.TODO(), &managedClusterRoleBindingList, client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(managedCSRB.Labels),
+	})
+	if err == nil {
+		for _, mcrb := range managedClusterRoleBindingList.Items {
+			if err := r.Client.Delete(context.TODO(), &mcrb); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
