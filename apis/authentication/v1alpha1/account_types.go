@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"fmt"
 
+	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kmapi "kmodules.xyz/client-go/api/v1"
 )
@@ -83,6 +84,8 @@ type AccountStatus struct {
 	// +optional
 	ObservedGeneration      int64 `json:"observedGeneration,omitempty"`
 	ObservedTokenGeneration int64 `json:"observedTokenGeneration,omitempty"`
+	// +optional
+	ServiceAccountRef *core.LocalObjectReference `json:"serviceAccountRef,omitempty"`
 }
 
 // Account is the Schema for the users API
