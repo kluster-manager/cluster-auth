@@ -20,10 +20,21 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kmapi "kmodules.xyz/client-go/api/v1"
 )
 
-// UserSpec defines the desired state of User
-type UserSpec struct {
+// +kubebuilder:validation:Enum=User;ServiceAccount
+type AccountType string
+
+const (
+	AccountTypeUser           AccountType = "User"
+	AccountTypeServiceAccount AccountType = "ServiceAccount"
+)
+
+// AccountSpec defines the desired state of Account
+type AccountSpec struct {
+	Type AccountType `json:"type"`
+
 	// The name that uniquely identifies this user among all active users.
 	// +optional
 	Username string `json:"username,omitempty"`
@@ -38,6 +49,8 @@ type UserSpec struct {
 	// Any additional information provided by the authenticator.
 	// +optional
 	Extra map[string]ExtraValue `json:"extra,omitempty"`
+
+	TokenGeneration *int64 `json:"tokenGeneration,omitempty"`
 }
 
 // ExtraValue masks the value so protobuf can generate
@@ -49,38 +62,58 @@ func (t ExtraValue) String() string {
 	return fmt.Sprintf("%v", []string(t))
 }
 
-// UserStatus defines the observed state of User
-type UserStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+type AccountPhase string
+
+const (
+	AccountPhaseInProgress AccountPhase = "InProgress"
+	AccountPhaseCurrent    AccountPhase = "Current"
+	AccountPhaseFailed     AccountPhase = "Failed"
+)
+
+// AccountStatus defines the observed state of Account
+type AccountStatus struct {
+	// Phase indicates the state this Vault cluster jumps in.
+	// +optional
+	Phase AccountPhase `json:"phase,omitempty"`
+	// Represents the latest available observations of a GrafanaDashboard current state.
+	// +optional
+	Conditions []kmapi.Condition `json:"conditions,omitempty"`
+	// ObservedGeneration is the most recent generation observed for this resource. It corresponds to the
+	// resource's generation, which is updated on mutation by the API Server.
+	// +optional
+	ObservedGeneration      int64 `json:"observedGeneration,omitempty"`
+	ObservedTokenGeneration int64 `json:"observedTokenGeneration,omitempty"`
 }
 
+// Account is the Schema for the users API
+
 //+k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 //+kubebuilder:resource:scope=Cluster
 
-// User is the Schema for the users API
-type User struct {
+// +kubebuilder:printcolumn:name="Username",type="string",JSONPath=".spec.username"
+// +kubebuilder:printcolumn:name="Type",type="string",JSONPath=".spec.type"
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.phase"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+type Account struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   UserSpec   `json:"spec,omitempty"`
-	Status UserStatus `json:"status,omitempty"`
+	Spec   AccountSpec   `json:"spec,omitempty"`
+	Status AccountStatus `json:"status,omitempty"`
 }
 
 //+k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 //+kubebuilder:object:root=true
 
-// UserList contains a list of User
-type UserList struct {
+// AccountList contains a list of Account
+type AccountList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []User `json:"items"`
+	Items           []Account `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&User{}, &UserList{})
+	SchemeBuilder.Register(&Account{}, &AccountList{})
 }
