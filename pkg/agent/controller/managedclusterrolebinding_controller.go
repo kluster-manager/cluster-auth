@@ -22,7 +22,6 @@ import (
 
 	authzv1alpah1 "github.com/kluster-manager/cluster-auth/apis/authorization/v1alpha1"
 	"github.com/kluster-manager/cluster-auth/pkg/common"
-	"github.com/kluster-manager/cluster-auth/pkg/utils"
 
 	rbac "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -62,9 +61,9 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 
 	var managedCRB authzv1alpah1.ManagedClusterRoleBinding
 	if err := r.HubClient.Get(ctx, req.NamespacedName, &managedCRB); err != nil {
-		return reconcile.Result{}, err
+		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
-	_, hubOwnerID := utils.GetUserIDAndHubOwnerIDFromLabelValues(&managedCRB)
+
 	userName := managedCRB.Subjects[0].Name
 
 	// Check if the managedCRB is marked for deletion
@@ -91,7 +90,7 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 	// impersonate clusterRole
 	cr := rbac.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   fmt.Sprintf("impersonate-%s-%s-%s", userName, hubOwnerID, rand.String(7)),
+			Name:   fmt.Sprintf("ace.%s.impersonate.%s", userName, rand.String(10)),
 			Labels: managedCRB.Labels,
 		},
 		Rules: []rbac.PolicyRule{

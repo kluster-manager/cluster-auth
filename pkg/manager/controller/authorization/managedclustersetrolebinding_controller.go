@@ -59,7 +59,7 @@ func (r *ManagedClusterSetRoleBindingReconciler) Reconcile(ctx context.Context, 
 	managedCSRB := &authorizationv1alpha1.ManagedClusterSetRoleBinding{}
 	err := r.Client.Get(ctx, req.NamespacedName, managedCSRB)
 	if err != nil {
-		return reconcile.Result{}, err
+		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 
 	// Check if the managedCRB is marked for deletion
