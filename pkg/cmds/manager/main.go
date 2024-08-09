@@ -25,6 +25,7 @@ import (
 	authorizationv1alpha1 "github.com/kluster-manager/cluster-auth/apis/authorization/v1alpha1"
 	"github.com/kluster-manager/cluster-auth/pkg/common"
 	"github.com/kluster-manager/cluster-auth/pkg/manager"
+	"github.com/kluster-manager/cluster-auth/pkg/manager/controller/authentication"
 	"github.com/kluster-manager/cluster-auth/pkg/manager/controller/authorization"
 	permission "github.com/kluster-manager/cluster-auth/pkg/manager/rbac"
 
@@ -142,6 +143,14 @@ func NewCmdManager() *cobra.Command {
 
 			if err := addonManager.AddAgent(agentAddOn); err != nil {
 				setupLog.Error(err, "unable to register addon agent")
+				os.Exit(1)
+			}
+
+			if err = (&authentication.AccountReconciler{
+				Client: mgr.GetClient(),
+				Scheme: mgr.GetScheme(),
+			}).SetupWithManager(mgr); err != nil {
+				setupLog.Error(err, "unable to create controller", "controller", "Account")
 				os.Exit(1)
 			}
 

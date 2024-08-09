@@ -17,6 +17,8 @@ limitations under the License.
 package utils
 
 import (
+	"strings"
+
 	authorizationv1alpha1 "github.com/kluster-manager/cluster-auth/apis/authorization/v1alpha1"
 )
 
@@ -32,4 +34,9 @@ func GetUserIDAndHubOwnerIDFromLabelValues(object *authorizationv1alpha1.Managed
 	}
 
 	return userID, hubOwnerID
+}
+
+func ReplaceColonWithHyphen(input string) string {
+	parts := strings.Split(input, ":")
+	return strings.Join(parts, "-")
 }
