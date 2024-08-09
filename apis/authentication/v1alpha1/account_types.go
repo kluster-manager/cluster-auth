@@ -34,8 +34,6 @@ const (
 
 // AccountSpec defines the desired state of Account
 type AccountSpec struct {
-	Type AccountType `json:"type"`
-
 	// The name that uniquely identifies this user among all active users.
 	// +optional
 	Username string `json:"username,omitempty"`
@@ -86,6 +84,7 @@ type AccountStatus struct {
 	ObservedTokenGeneration int64 `json:"observedTokenGeneration,omitempty"`
 	// +optional
 	ServiceAccountRef *core.LocalObjectReference `json:"serviceAccountRef,omitempty"`
+	Type              AccountType                `json:"type"`
 }
 
 // Account is the Schema for the users API
@@ -96,7 +95,7 @@ type AccountStatus struct {
 //+kubebuilder:resource:scope=Cluster
 
 // +kubebuilder:printcolumn:name="Username",type="string",JSONPath=".spec.username"
-// +kubebuilder:printcolumn:name="Type",type="string",JSONPath=".spec.type"
+// +kubebuilder:printcolumn:name="Type",type="string",JSONPath=".status.type"
 // +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.phase"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 type Account struct {

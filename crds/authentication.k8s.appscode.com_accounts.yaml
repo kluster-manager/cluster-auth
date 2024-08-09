@@ -18,7 +18,7 @@ spec:
     - jsonPath: .spec.username
       name: Username
       type: string
-    - jsonPath: .spec.type
+    - jsonPath: .status.type
       name: Type
       type: string
     - jsonPath: .status.phase
@@ -52,17 +52,10 @@ spec:
               tokenGeneration:
                 format: int64
                 type: integer
-              type:
-                enum:
-                - User
-                - ServiceAccount
-                type: string
               uid:
                 type: string
               username:
                 type: string
-            required:
-            - type
             type: object
           status:
             properties:
@@ -106,6 +99,13 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
+              type:
+                enum:
+                - User
+                - ServiceAccount
+                type: string
+            required:
+            - type
             type: object
         type: object
     served: true
