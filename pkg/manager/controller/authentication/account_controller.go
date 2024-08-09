@@ -6,7 +6,6 @@ import (
 
 	authenticationv1alpha1 "github.com/kluster-manager/cluster-auth/apis/authentication/v1alpha1"
 	"github.com/kluster-manager/cluster-auth/pkg/common"
-	"github.com/kluster-manager/cluster-auth/pkg/utils"
 
 	core "k8s.io/api/core/v1"
 	rbac "k8s.io/api/rbac/v1"
@@ -30,21 +29,21 @@ func (r *AccountReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	logger := log.FromContext(ctx)
 	logger.Info("Start reconciling...")
 
-	usr := &authenticationv1alpha1.Account{}
-	err := r.Client.Get(ctx, req.NamespacedName, usr)
+	acc := &authenticationv1alpha1.Account{}
+	err := r.Client.Get(ctx, req.NamespacedName, acc)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
 
-	if err = r.createServiceAccount(ctx, usr); err != nil {
+	if err = r.createServiceAccount(ctx, acc); err != nil {
 		return reconcile.Result{}, err
 	}
 
-	if err = r.createGatewayClusterRoleBindingForUser(ctx, usr); err != nil {
+	if err = r.createGatewayClusterRoleBindingForUser(ctx, acc); err != nil {
 		return reconcile.Result{}, err
 	}
 
-	if err = r.createClusterRoleAndClusterRoleBindingToImpersonate(ctx, usr); err != nil {
+	if err = r.createClusterRoleAndClusterRoleBindingToImpersonate(ctx, acc); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -71,8 +70,11 @@ func (r *AccountReconciler) createServiceAccount(ctx context.Context, acc *authe
 	// create service-account for user
 	sa := core.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      utils.ReplaceColonWithHyphen(acc.Name),
+			Name:      acc.Name,
 			Namespace: common.AddonAgentInstallNamespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(acc, authenticationv1alpha1.GroupVersion.WithKind("Account")),
+			},
 		},
 	}
 
@@ -107,7 +109,7 @@ func (r *AccountReconciler) createGatewayClusterRoleBindingForUser(ctx context.C
 			{
 				APIGroup:  "",
 				Kind:      "ServiceAccount",
-				Name:      utils.ReplaceColonWithHyphen(acc.Name),
+				Name:      acc.Name,
 				Namespace: common.AddonAgentInstallNamespace,
 			},
 		}
@@ -115,7 +117,10 @@ func (r *AccountReconciler) createGatewayClusterRoleBindingForUser(ctx context.C
 
 	crb := rbac.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("ace:%s:proxy", acc.Spec.UID),
+			Name: fmt.Sprintf("ace.%s.proxy", acc.Spec.UID),
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(acc, authenticationv1alpha1.GroupVersion.WithKind("Account")),
+			},
 		},
 		Subjects: sub,
 		RoleRef: rbac.RoleRef{
@@ -126,7 +131,7 @@ func (r *AccountReconciler) createGatewayClusterRoleBindingForUser(ctx context.C
 	}
 
 	if acc.Spec.Type == authenticationv1alpha1.AccountTypeServiceAccount {
-		crb.Name = fmt.Sprintf("ace:%s:proxy", acc.Spec.Username)
+		crb.Name = fmt.Sprintf("ace.%s.proxy", acc.Spec.Username)
 	}
 
 	_, err := cu.CreateOrPatch(ctx, r.Client, &crb, func(obj client.Object, createOp bool) client.Object {
@@ -145,7 +150,10 @@ func (r *AccountReconciler) createClusterRoleAndClusterRoleBindingToImpersonate(
 	// impersonate clusterRole
 	cr := rbac.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("ace:%s:impersonate", acc.Spec.UID),
+			Name: fmt.Sprintf("ace.%s.impersonate", acc.Spec.UID),
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(acc, authenticationv1alpha1.GroupVersion.WithKind("Account")),
+			},
 		},
 		Rules: []rbac.PolicyRule{
 			{
@@ -160,14 +168,17 @@ func (r *AccountReconciler) createClusterRoleAndClusterRoleBindingToImpersonate(
 	if acc.Spec.Type == authenticationv1alpha1.AccountTypeServiceAccount {
 		cr = rbac.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: fmt.Sprintf("ace:%s:impersonate", acc.Spec.Username),
+				Name: fmt.Sprintf("ace.%s.impersonate", acc.Spec.Username),
+				OwnerReferences: []metav1.OwnerReference{
+					*metav1.NewControllerRef(acc, authenticationv1alpha1.GroupVersion.WithKind("Account")),
+				},
 			},
 			Rules: []rbac.PolicyRule{
 				{
 					APIGroups:     []string{""},
 					Resources:     []string{"serviceaccounts"},
 					Verbs:         []string{"impersonate"},
-					ResourceNames: []string{utils.ReplaceColonWithHyphen(acc.Name)},
+					ResourceNames: []string{acc.Name},
 				},
 			},
 		}
@@ -187,7 +198,7 @@ func (r *AccountReconciler) createClusterRoleAndClusterRoleBindingToImpersonate(
 		{
 			APIGroup:  "",
 			Kind:      "ServiceAccount",
-			Name:      utils.ReplaceColonWithHyphen(acc.Name),
+			Name:      acc.Name,
 			Namespace: common.AddonAgentInstallNamespace,
 		},
 	}
@@ -195,6 +206,9 @@ func (r *AccountReconciler) createClusterRoleAndClusterRoleBindingToImpersonate(
 	crb := rbac.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cr.Name, // creating cluster-rolebinding name with the same name of cluster-role
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(acc, authenticationv1alpha1.GroupVersion.WithKind("Account")),
+			},
 		},
 		Subjects: sub,
 		RoleRef: rbac.RoleRef{
