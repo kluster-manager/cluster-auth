@@ -154,13 +154,6 @@ func NewCmdManager() *cobra.Command {
 				os.Exit(1)
 			}
 
-			if err = (&authorization.ManagedClusterRoleBindingReconciler{
-				Client: mgr.GetClient(),
-				Scheme: mgr.GetScheme(),
-			}).SetupWithManager(mgr); err != nil {
-				setupLog.Error(err, "unable to create controller", "controller", "ManagedClusterRoleBinding")
-				os.Exit(1)
-			}
 			if err = (&authorization.ManagedClusterSetRoleBindingReconciler{
 				Client: mgr.GetClient(),
 				Scheme: mgr.GetScheme(),
