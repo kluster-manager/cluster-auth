@@ -28,4 +28,6 @@ const (
 	UserAuthLabel               = "authentication.k8s.appscode.com/user"
 	HubOwnerLabel               = "authentication.k8s.appscode.com/hub-owner"
 	HubClusterIdLabel           = "cluster.k8s.appscode.com/cluster-id"
+
+	ServiceAccountPrefix = "system:serviceaccount:"
 )

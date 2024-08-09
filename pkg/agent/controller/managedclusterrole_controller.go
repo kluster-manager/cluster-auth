@@ -53,7 +53,7 @@ func (r *ManagedClusterRoleReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 	managedClusterRole := &authorizationv1alpha1.ManagedClusterRole{}
 	if err := r.HubClient.Get(ctx, req.NamespacedName, managedClusterRole); err != nil {
-		return reconcile.Result{}, err
+		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 
 	// create clusterRole in spoke cluster
