@@ -17,6 +17,7 @@ limitations under the License.
 package utils
 
 import (
+	"errors"
 	"strings"
 
 	authorizationv1alpha1 "github.com/kluster-manager/cluster-auth/apis/authorization/v1alpha1"
@@ -39,4 +40,12 @@ func GetUserIDAndHubOwnerIDFromLabelValues(object *authorizationv1alpha1.Managed
 func ReplaceColonWithHyphen(input string) string {
 	parts := strings.Split(input, ":")
 	return strings.Join(parts, "-")
+}
+
+func ExtractServiceAccountNameAndNamespace(name string) (string, string, error) {
+	parts := strings.Split(name, ":")
+	if len(parts) == 4 {
+		return parts[3], parts[2], nil
+	}
+	return "", "", errors.New("account username is invalid")
 }
