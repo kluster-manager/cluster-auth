@@ -42,8 +42,8 @@ func ReplaceColonWithHyphen(input string) string {
 	return strings.Join(parts, "-")
 }
 
-func ExtractServiceAccountNameAndNamespace(name string) (string, string, error) {
-	parts := strings.Split(name, ":")
+func ExtractServiceAccountNameAndNamespace(s string) (name, namespace string, err error) {
+	parts := strings.Split(s, ":")
 	if len(parts) == 4 {
 		return parts[3], parts[2], nil
 	}
