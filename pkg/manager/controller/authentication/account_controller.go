@@ -23,6 +23,7 @@ import (
 
 	authenticationv1alpha1 "github.com/kluster-manager/cluster-auth/apis/authentication/v1alpha1"
 	"github.com/kluster-manager/cluster-auth/pkg/common"
+	"github.com/kluster-manager/cluster-auth/pkg/utils"
 
 	core "k8s.io/api/core/v1"
 	rbac "k8s.io/api/rbac/v1"
@@ -138,12 +139,17 @@ func (r *AccountReconciler) createGatewayClusterRoleBindingForUser(ctx context.C
 	}
 
 	if strings.Contains(acc.Spec.Username, common.ServiceAccountPrefix) {
+		name, namespace, err := utils.ExtractServiceAccountNameAndNamespace(acc.Spec.Username)
+		if err != nil {
+			return err
+		}
+
 		sub = []rbac.Subject{
 			{
 				APIGroup:  "",
 				Kind:      "ServiceAccount",
-				Name:      acc.Name,
-				Namespace: common.AddonAgentInstallNamespace,
+				Name:      name,
+				Namespace: namespace,
 			},
 		}
 	}
@@ -164,7 +170,7 @@ func (r *AccountReconciler) createGatewayClusterRoleBindingForUser(ctx context.C
 	}
 
 	if strings.Contains(acc.Spec.Username, common.ServiceAccountPrefix) {
-		crb.Name = fmt.Sprintf("ace.%s.proxy", acc.Spec.Username)
+		crb.Name = fmt.Sprintf("ace.%s.proxy", acc.Name)
 	}
 
 	_, err := cu.CreateOrPatch(ctx, r.Client, &crb, func(obj client.Object, createOp bool) client.Object {
@@ -199,9 +205,14 @@ func (r *AccountReconciler) createClusterRoleAndClusterRoleBindingToImpersonate(
 	}
 
 	if strings.Contains(acc.Spec.Username, common.ServiceAccountPrefix) {
+		name, _, err := utils.ExtractServiceAccountNameAndNamespace(acc.Spec.Username)
+		if err != nil {
+			return err
+		}
+
 		cr = rbac.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: fmt.Sprintf("ace.%s.impersonate", acc.Spec.Username),
+				Name: fmt.Sprintf("ace.%s.impersonate", acc.Name),
 				OwnerReferences: []metav1.OwnerReference{
 					*metav1.NewControllerRef(acc, authenticationv1alpha1.GroupVersion.WithKind("Account")),
 				},
@@ -211,7 +222,7 @@ func (r *AccountReconciler) createClusterRoleAndClusterRoleBindingToImpersonate(
 					APIGroups:     []string{""},
 					Resources:     []string{"serviceaccounts"},
 					Verbs:         []string{"impersonate"},
-					ResourceNames: []string{acc.Name},
+					ResourceNames: []string{name},
 				},
 			},
 		}
