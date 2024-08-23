@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"fmt"
 
 	authzv1alpah1 "github.com/kluster-manager/cluster-auth/apis/authorization/v1alpha1"
 	"github.com/kluster-manager/cluster-auth/pkg/common"
@@ -26,7 +25,6 @@ import (
 	rbac "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/util/rand"
 	cu "kmodules.xyz/client-go/client"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -64,8 +62,6 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 
-	userName := managedCRB.Subjects[0].Name
-
 	// Check if the managedCRB is marked for deletion
 	if managedCRB.GetDeletionTimestamp() != nil {
 		if controllerutil.ContainsFinalizer(&managedCRB, common.SpokeAuthorizationFinalizer) {
@@ -84,80 +80,6 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 
 	// Add finalizer if not present
 	if err := r.addFinalizerIfNeeded(&managedCRB); err != nil {
-		return reconcile.Result{}, err
-	}
-
-	// impersonate clusterRole
-	cr := rbac.ClusterRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   fmt.Sprintf("ace.%s.impersonate.%s", userName, rand.String(10)),
-			Labels: managedCRB.Labels,
-		},
-		Rules: []rbac.PolicyRule{
-			{
-				APIGroups:     []string{""},
-				Resources:     []string{"users"},
-				Verbs:         []string{"impersonate"},
-				ResourceNames: []string{userName},
-			},
-		},
-	}
-
-	crList := &rbac.ClusterRoleList{}
-	_ = r.SpokeClient.List(ctx, crList, client.MatchingLabelsSelector{
-		Selector: labels.SelectorFromSet(managedCRB.Labels),
-	})
-
-	if len(crList.Items) > 0 {
-		cr = crList.Items[0]
-	}
-
-	_, err := cu.CreateOrPatch(context.Background(), r.SpokeClient, &cr, func(obj client.Object, createOp bool) client.Object {
-		in := obj.(*rbac.ClusterRole)
-		in.Rules = cr.Rules
-		return in
-	})
-	if err != nil {
-		return reconcile.Result{}, err
-	}
-
-	// this clusterRoleBinding will give permission to the user
-	crb := rbac.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   cr.Name,
-			Labels: managedCRB.Labels,
-		},
-		Subjects: []rbac.Subject{
-			{
-				APIGroup:  "",
-				Kind:      "ServiceAccount",
-				Name:      "cluster-gateway",
-				Namespace: "open-cluster-management-managed-serviceaccount",
-			},
-		},
-		RoleRef: rbac.RoleRef{
-			APIGroup: rbac.GroupName,
-			Kind:     "ClusterRole",
-			Name:     cr.Name,
-		},
-	}
-
-	crbList := &rbac.ClusterRoleBindingList{}
-	_ = r.SpokeClient.List(ctx, crbList, client.MatchingLabelsSelector{
-		Selector: labels.SelectorFromSet(managedCRB.Labels),
-	})
-
-	if len(crbList.Items) > 0 {
-		crb = crbList.Items[0]
-	}
-
-	_, err = cu.CreateOrPatch(context.Background(), r.SpokeClient, &crb, func(obj client.Object, createOp bool) client.Object {
-		in := obj.(*rbac.ClusterRoleBinding)
-		in.Subjects = crb.Subjects
-		in.RoleRef = crb.RoleRef
-		return in
-	})
-	if err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -187,7 +109,7 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 				Name:     managedCRB.RoleRef.Name,
 			},
 		}
-		_, err = cu.CreateOrPatch(context.Background(), r.SpokeClient, givenClusterRolebinding, func(obj client.Object, createOp bool) client.Object {
+		_, err := cu.CreateOrPatch(context.Background(), r.SpokeClient, givenClusterRolebinding, func(obj client.Object, createOp bool) client.Object {
 			in := obj.(*rbac.ClusterRoleBinding)
 			in.Subjects = givenClusterRolebinding.Subjects
 			in.RoleRef = givenClusterRolebinding.RoleRef
@@ -216,7 +138,7 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 				},
 			}
 
-			_, err = cu.CreateOrPatch(context.Background(), r.SpokeClient, givenRolebinding, func(obj client.Object, createOp bool) client.Object {
+			_, err := cu.CreateOrPatch(context.Background(), r.SpokeClient, givenRolebinding, func(obj client.Object, createOp bool) client.Object {
 				in := obj.(*rbac.RoleBinding)
 				in.Subjects = givenRolebinding.Subjects
 				in.RoleRef = givenRolebinding.RoleRef
