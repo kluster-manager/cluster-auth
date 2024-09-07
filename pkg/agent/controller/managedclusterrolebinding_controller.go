@@ -84,13 +84,7 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 	}
 
 	// now give actual permission to the User
-	sub := []rbac.Subject{
-		{
-			APIGroup: "",
-			Kind:     "User",
-			Name:     managedCRB.Subjects[0].Name,
-		},
-	}
+	sub := getSubject(managedCRB)
 
 	if managedCRB.RoleRef.Namespaces == nil {
 		givenClusterRolebinding := &rbac.ClusterRoleBinding{
@@ -208,6 +202,18 @@ func (r *ManagedClusterRoleBindingReconciler) SetupWithManager(mgr ctrl.Manager)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&authzv1alpah1.ManagedClusterRoleBinding{}).Watches(&authzv1alpah1.ManagedClusterRoleBinding{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
+}
+
+func getSubject(managedCRB authzv1alpah1.ManagedClusterRoleBinding) []rbac.Subject {
+	subs := make([]rbac.Subject, 0)
+	for _, sub := range managedCRB.Subjects {
+		subs = append(subs, rbac.Subject{
+			APIGroup: sub.APIGroup,
+			Kind:     sub.Kind,
+			Name:     sub.Name,
+		})
+	}
+	return subs
 }
 
 /*
