@@ -205,7 +205,7 @@ func (r *ManagedClusterRoleBindingReconciler) SetupWithManager(mgr ctrl.Manager)
 }
 
 func getSubject(managedCRB authzv1alpah1.ManagedClusterRoleBinding) []rbac.Subject {
-	subs := make([]rbac.Subject, 0)
+	var subs []rbac.Subject
 	for _, sub := range managedCRB.Subjects {
 		subs = append(subs, rbac.Subject{
 			APIGroup: sub.APIGroup,
