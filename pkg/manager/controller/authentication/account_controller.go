@@ -201,6 +201,12 @@ func (r *AccountReconciler) createClusterRoleAndClusterRoleBindingToImpersonate(
 				Verbs:         []string{"impersonate"},
 				ResourceNames: []string{acc.Name},
 			},
+			{
+				APIGroups:     []string{""},
+				Resources:     []string{"groups"},
+				Verbs:         []string{"impersonate"},
+				ResourceNames: acc.Spec.Groups,
+			},
 		},
 	}
 
