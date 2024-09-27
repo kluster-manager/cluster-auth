@@ -7,8 +7,8 @@
 ```bash
 $ helm repo add appscode https://charts.appscode.com/stable
 $ helm repo update
-$ helm search repo appscode/cluster-auth-agent --version=v2024.2.25
-$ helm upgrade -i cluster-auth appscode/cluster-auth-agent -n open-cluster-management-cluster-auth --create-namespace --version=v2024.2.25
+$ helm search repo appscode/cluster-auth-agent --version=v2024.9.30
+$ helm upgrade -i cluster-auth appscode/cluster-auth-agent -n open-cluster-management-cluster-auth --create-namespace --version=v2024.9.30
 ```
 
 ## Introduction
@@ -24,7 +24,7 @@ This chart deploys an Cluster Auth Agent on a [Kubernetes](http://kubernetes.io)
 To install/upgrade the chart with the release name `cluster-auth`:
 
 ```bash
-$ helm upgrade -i cluster-auth appscode/cluster-auth-agent -n open-cluster-management-cluster-auth --create-namespace --version=v2024.2.25
+$ helm upgrade -i cluster-auth appscode/cluster-auth-agent -n open-cluster-management-cluster-auth --create-namespace --version=v2024.9.30
 ```
 
 The command deploys an Cluster Auth Agent on the Kubernetes cluster in the default configuration. The [configuration](#configuration) section lists the parameters that can be configured during installation.
@@ -71,17 +71,20 @@ The following table lists the configurable parameters of the `cluster-auth-agent
 | serviceAccount.name              | The name of the service account to use. If not set and create is true, a name is generated using the fullname template                                                                                                                    | <code></code>                                                                                                                                                                                  |
 | monitoring.agent                 | Name of monitoring agent (one of "prometheus.io", "prometheus.io/operator", "prometheus.io/builtin")                                                                                                                                      | <code>prometheus.io/operator</code>                                                                                                                                                            |
 | monitoring.serviceMonitor.labels | Specify the labels for ServiceMonitor. Prometheus crd will select ServiceMonitor using these labels. Only usable when monitoring agent is `prometheus.io/operator`.                                                                       | <code>{}</code>                                                                                                                                                                                |
+| apiServer.healthcheck.enabled    |                                                                                                                                                                                                                                           | <code>false</code>                                                                                                                                                                             |
+| hubKubeconfigSecretName          | Name of OCM Hub Kubeconfig secret                                                                                                                                                                                                         | <code>""</code>                                                                                                                                                                                |
+| clusterName                      | We need to pass the cluster name because the OCM-MC host cluster doesn't have Klusterlet object.                                                                                                                                          | <code>""</code>                                                                                                                                                                                |
 
 
 Specify each parameter using the `--set key=value[,key=value]` argument to `helm upgrade -i`. For example:
 
 ```bash
-$ helm upgrade -i cluster-auth appscode/cluster-auth-agent -n open-cluster-management-cluster-auth --create-namespace --version=v2024.2.25 --set replicaCount=1
+$ helm upgrade -i cluster-auth appscode/cluster-auth-agent -n open-cluster-management-cluster-auth --create-namespace --version=v2024.9.30 --set replicaCount=1
 ```
 
 Alternatively, a YAML file that specifies the values for the parameters can be provided while
 installing the chart. For example:
 
 ```bash
-$ helm upgrade -i cluster-auth appscode/cluster-auth-agent -n open-cluster-management-cluster-auth --create-namespace --version=v2024.2.25 --values values.yaml
+$ helm upgrade -i cluster-auth appscode/cluster-auth-agent -n open-cluster-management-cluster-auth --create-namespace --version=v2024.9.30 --values values.yaml
 ```
