@@ -22,6 +22,7 @@ import (
 	authorizationv1alpha1 "github.com/kluster-manager/cluster-auth/apis/authorization/v1alpha1"
 	"github.com/kluster-manager/cluster-auth/pkg/common"
 
+	strmod "gomodules.xyz/x/strings"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -33,6 +34,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -99,8 +101,16 @@ func (r *ManagedClusterSetRoleBindingReconciler) Reconcile(ctx context.Context, 
 		return reconcile.Result{}, err
 	}
 
+	if managedClusterSet.Name == "global" {
+		if err = r.List(ctx, &clusters); err != nil {
+			return reconcile.Result{}, err
+		}
+	}
+
+	clusterNameList := make([]string, 0, len(clusters.Items))
 	// create managedClusterRoleBinding for every cluster of this clusterSet
 	for _, cluster := range clusters.Items {
+		clusterNameList = append(clusterNameList, cluster.Name)
 		managedCRB := &authorizationv1alpha1.ManagedClusterRoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      managedCSRB.Name + "-" + cluster.Name,
@@ -119,6 +129,22 @@ func (r *ManagedClusterSetRoleBindingReconciler) Reconcile(ctx context.Context, 
 		})
 		if err != nil {
 			return reconcile.Result{}, err
+		}
+	}
+
+	managedCRBList := &authorizationv1alpha1.ManagedClusterRoleBindingList{}
+	err = r.List(ctx, managedCRBList, client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(managedCSRB.Labels),
+	})
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	for _, crb := range managedCRBList.Items {
+		if !strmod.Contains(clusterNameList, crb.Namespace) {
+			if err = r.Delete(ctx, &crb); err != nil {
+				return reconcile.Result{}, err
+			}
 		}
 	}
 
@@ -152,9 +178,44 @@ func (r *ManagedClusterSetRoleBindingReconciler) deleteAssociatedResources(manag
 	return nil
 }
 
-// SetupWithManager sets up the controller with the Manager.
+func (r *ManagedClusterSetRoleBindingReconciler) mapManagedClusterSetToRoleBindings(ctx context.Context, obj client.Object) []reconcile.Request {
+	logger := log.FromContext(ctx)
+	managedClusterSet, ok := obj.(*clusterv1beta2.ManagedClusterSet)
+	if !ok {
+		return nil
+	}
+
+	logger.Info("ManagedClusterSet updated", "name", managedClusterSet.GetName())
+
+	managedCSRBList := &authorizationv1alpha1.ManagedClusterSetRoleBindingList{}
+	err := r.Client.List(ctx, managedCSRBList)
+	if err != nil {
+		logger.Error(err, "Failed to list ManagedClusterSetRoleBinding objects")
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, managedCSRB := range managedCSRBList.Items {
+		if managedCSRB.ClusterSetRef.Name == managedClusterSet.GetName() {
+			// If it matches, enqueue a reconcile request for the ManagedClusterSetRoleBinding
+			requests = append(requests, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name: managedCSRB.Name,
+				},
+			})
+			logger.Info("Enqueuing request", "name", managedCSRB.Name)
+		}
+	}
+
+	return requests
+}
+
 func (r *ManagedClusterSetRoleBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&authorizationv1alpha1.ManagedClusterSetRoleBinding{}).
+		Watches(
+			&clusterv1beta2.ManagedClusterSet{},
+			handler.EnqueueRequestsFromMapFunc(r.mapManagedClusterSetToRoleBindings),
+		).
 		Complete(r)
 }

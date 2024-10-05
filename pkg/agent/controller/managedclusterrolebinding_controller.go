@@ -86,7 +86,7 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 	// now give actual permission to the User
 	sub := getSubject(managedCRB)
 
-	if managedCRB.RoleRef.Namespaces == nil {
+	if len(managedCRB.RoleRef.Namespaces) == 0 {
 		givenClusterRolebinding := &rbac.ClusterRoleBinding{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: rbac.SchemeGroupVersion.String(),
@@ -98,8 +98,8 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 			},
 			Subjects: sub,
 			RoleRef: rbac.RoleRef{
-				APIGroup: rbac.GroupName,
-				Kind:     "ClusterRole",
+				APIGroup: managedCRB.RoleRef.APIGroup,
+				Kind:     managedCRB.RoleRef.Kind,
 				Name:     managedCRB.RoleRef.Name,
 			},
 		}
@@ -126,8 +126,8 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 				},
 				Subjects: sub,
 				RoleRef: rbac.RoleRef{
-					APIGroup: rbac.GroupName,
-					Kind:     "Role",
+					APIGroup: managedCRB.RoleRef.APIGroup,
+					Kind:     managedCRB.RoleRef.Kind,
 					Name:     managedCRB.RoleRef.Name,
 				},
 			}
