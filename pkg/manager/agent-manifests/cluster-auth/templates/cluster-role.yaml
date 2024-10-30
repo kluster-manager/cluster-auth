@@ -10,7 +10,7 @@ rules:
   - ""
   resources:
   - namespaces
-  verbs: ["get"]
+  verbs: ["get", "list", "watch"]
 # create/update rbac objects
 - apiGroups:
   - rbac.authorization.k8s.io
