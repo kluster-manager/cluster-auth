@@ -21,6 +21,7 @@ import (
 
 	authzv1alpah1 "github.com/kluster-manager/cluster-auth/apis/authorization/v1alpha1"
 	"github.com/kluster-manager/cluster-auth/pkg/common"
+	"github.com/kluster-manager/cluster-auth/pkg/utils"
 
 	rbac "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -114,6 +115,14 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 		}
 	} else {
 		for _, ns := range managedCRB.RoleRef.Namespaces {
+			exist, err := utils.IsNamespaceExist(r.SpokeClient, ns)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+			if !exist {
+				continue
+			}
+
 			givenRolebinding := &rbac.RoleBinding{
 				TypeMeta: metav1.TypeMeta{
 					APIVersion: rbac.SchemeGroupVersion.String(),
@@ -132,7 +141,7 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 				},
 			}
 
-			_, err := cu.CreateOrPatch(context.Background(), r.SpokeClient, givenRolebinding, func(obj client.Object, createOp bool) client.Object {
+			_, err = cu.CreateOrPatch(context.Background(), r.SpokeClient, givenRolebinding, func(obj client.Object, createOp bool) client.Object {
 				in := obj.(*rbac.RoleBinding)
 				in.Subjects = givenRolebinding.Subjects
 				in.RoleRef = givenRolebinding.RoleRef
