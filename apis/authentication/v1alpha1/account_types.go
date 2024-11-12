@@ -42,9 +42,9 @@ type AccountSpec struct {
 	// different UIDs.
 	// +optional
 	UID string `json:"uid,omitempty"`
-	// The names of groups this user is a part of.
+	// The names of organization this user is a part of, with each organization potentially having multiple teams.
 	// +optional
-	Groups []string `json:"groups,omitempty"`
+	Groups map[string][]string `json:"groups,omitempty"`
 	// Any additional information provided by the authenticator.
 	// +optional
 	Extra map[string]ExtraValue `json:"extra,omitempty"`

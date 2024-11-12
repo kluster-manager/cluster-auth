@@ -69,6 +69,10 @@ func (r *AccountReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return reconcile.Result{}, r.setStatusFailed(ctx, acc, err)
 	}
 
+	if err = r.createImpersonateClusterRoleAndRoleBinding(ctx, acc); err != nil {
+		return reconcile.Result{}, r.setStatusFailed(ctx, acc, err)
+	}
+
 	// Set the status to success after successful reconciliation
 	if acc.Status.Phase != authenticationv1alpha1.AccountPhaseCurrent {
 		if err := r.setStatusSuccess(ctx, acc, "Reconciliation completed successfully."); err != nil {
@@ -128,7 +132,7 @@ func (r *AccountReconciler) createGatewayClusterRoleBindingForUser(ctx context.C
 	sub := []rbac.Subject{
 		{
 			APIGroup:  "",
-			Kind:      "ServiceAccount",
+			Kind:      "User",
 			Name:      acc.Name,
 			Namespace: common.AddonAgentInstallNamespace,
 		},
@@ -155,6 +159,75 @@ func (r *AccountReconciler) createGatewayClusterRoleBindingForUser(ctx context.C
 
 	_, err := cu.CreateOrPatch(ctx, r.Client, &crb, func(obj client.Object, createOp bool) client.Object {
 		in := obj.(*rbac.ClusterRoleBinding)
+		in.Subjects = crb.Subjects
+		in.RoleRef = crb.RoleRef
+		return in
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *AccountReconciler) createImpersonateClusterRoleAndRoleBinding(ctx context.Context, acc *authenticationv1alpha1.Account) error {
+	// impersonate clusterRole
+	cr := rbac.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "ace.impersonate",
+		},
+		Rules: []rbac.PolicyRule{
+			{
+				APIGroups: []string{""},
+				Resources: []string{"users", "groups", "serviceaccounts"},
+				Verbs:     []string{"impersonate"},
+			},
+			{
+				APIGroups: []string{"authentication.k8s.io"},
+				Resources: []string{"userextras/ace.appscode.com/org-id"},
+				Verbs:     []string{"impersonate"},
+			},
+		},
+	}
+	_, err := cu.CreateOrPatch(ctx, r.Client, &cr, func(obj client.Object, createOp bool) client.Object {
+		in := obj.(*rbac.ClusterRole)
+		in.ObjectMeta = cr.ObjectMeta
+		in.Rules = cr.Rules
+		return in
+	})
+	if err != nil {
+		return err
+	}
+
+	sub := []rbac.Subject{
+		{
+			APIGroup:  "",
+			Kind:      "ServiceAccount",
+			Name:      acc.Name,
+			Namespace: common.AddonAgentInstallNamespace,
+		},
+	}
+	crb := rbac.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("ace.%s.impersonate", acc.Spec.UID),
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(acc, authenticationv1alpha1.GroupVersion.WithKind("Account")),
+			},
+		},
+		Subjects: sub,
+		RoleRef: rbac.RoleRef{
+			APIGroup: rbac.GroupName,
+			Kind:     "ClusterRole",
+			Name:     cr.Name,
+		},
+	}
+
+	if strings.Contains(acc.Spec.Username, common.ServiceAccountPrefix) {
+		crb.Name = fmt.Sprintf("ace.%s.impersonate", acc.Name)
+	}
+
+	_, err = cu.CreateOrPatch(context.Background(), r.Client, &crb, func(obj client.Object, createOp bool) client.Object {
+		in := obj.(*rbac.ClusterRoleBinding)
+		in.ObjectMeta = crb.ObjectMeta
 		in.Subjects = crb.Subjects
 		in.RoleRef = crb.RoleRef
 		return in

@@ -46,9 +46,11 @@ spec:
                   type: array
                 type: object
               groups:
-                items:
-                  type: string
-                type: array
+                additionalProperties:
+                  items:
+                    type: string
+                  type: array
+                type: object
               tokenGeneration:
                 format: int64
                 type: integer
