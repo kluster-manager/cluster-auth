@@ -129,10 +129,16 @@ func (r *AccountReconciler) createServiceAccount(ctx context.Context, acc *authe
 }
 
 func (r *AccountReconciler) createGatewayClusterRoleBindingForUser(ctx context.Context, acc *authenticationv1alpha1.Account) error {
+	// Determine subject kind based on whether the username contains the service account prefix
+	subKind := "User"
+	if strings.Contains(acc.Spec.Username, common.ServiceAccountPrefix) {
+		subKind = "ServiceAccount"
+	}
+
 	sub := []rbac.Subject{
 		{
 			APIGroup:  "",
-			Kind:      "User",
+			Kind:      subKind,
 			Name:      acc.Name,
 			Namespace: common.AddonAgentInstallNamespace,
 		},
