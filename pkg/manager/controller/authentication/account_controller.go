@@ -23,6 +23,7 @@ import (
 
 	authenticationv1alpha1 "github.com/kluster-manager/cluster-auth/apis/authentication/v1alpha1"
 	"github.com/kluster-manager/cluster-auth/pkg/common"
+	"github.com/kluster-manager/cluster-auth/pkg/utils"
 
 	core "k8s.io/api/core/v1"
 	rbac "k8s.io/api/rbac/v1"
@@ -177,23 +178,45 @@ func (r *AccountReconciler) createGatewayClusterRoleBindingForUser(ctx context.C
 
 func (r *AccountReconciler) createImpersonateClusterRoleAndRoleBinding(ctx context.Context, acc *authenticationv1alpha1.Account) error {
 	// impersonate clusterRole
-	cr := rbac.ClusterRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "ace.impersonate",
-		},
-		Rules: []rbac.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"users", "groups", "serviceaccounts"},
-				Verbs:     []string{"impersonate"},
-			},
-			{
-				APIGroups: []string{"authentication.k8s.io"},
-				Resources: []string{"userextras/ace.appscode.com/org-id"},
-				Verbs:     []string{"impersonate"},
-			},
+	rules := []rbac.PolicyRule{
+		{
+			APIGroups: []string{"authentication.k8s.io"},
+			Resources: []string{"userextras/ace.appscode.com/org-id"},
+			Verbs:     []string{"impersonate"},
 		},
 	}
+
+	if strings.Contains(acc.Spec.Username, common.ServiceAccountPrefix) {
+		name, _, err := utils.ExtractServiceAccountNameAndNamespace(acc.Spec.Username)
+		if err != nil {
+			return err
+		}
+
+		rules = append(rules, rbac.PolicyRule{
+			APIGroups:     []string{""},
+			Resources:     []string{"serviceaccounts"},
+			Verbs:         []string{"impersonate"},
+			ResourceNames: []string{name},
+		})
+	} else {
+		rules = append(rules, rbac.PolicyRule{
+			APIGroups:     []string{""},
+			Resources:     []string{"users"},
+			Verbs:         []string{"impersonate"},
+			ResourceNames: []string{acc.Spec.Username},
+		})
+	}
+
+	cr := rbac.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s.impersonate", acc.Name),
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(acc, authenticationv1alpha1.GroupVersion.WithKind("Account")),
+			},
+		},
+		Rules: rules,
+	}
+
 	_, err := cu.CreateOrPatch(ctx, r.Client, &cr, func(obj client.Object, createOp bool) client.Object {
 		in := obj.(*rbac.ClusterRole)
 		in.ObjectMeta = cr.ObjectMeta
@@ -212,9 +235,10 @@ func (r *AccountReconciler) createImpersonateClusterRoleAndRoleBinding(ctx conte
 			Namespace: common.AddonAgentInstallNamespace,
 		},
 	}
+
 	crb := rbac.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s.impersonate", acc.Name),
+			Name: cr.Name, // creating cluster-rolebinding name with the same name of cluster-role
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(acc, authenticationv1alpha1.GroupVersion.WithKind("Account")),
 			},
@@ -237,6 +261,7 @@ func (r *AccountReconciler) createImpersonateClusterRoleAndRoleBinding(ctx conte
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
