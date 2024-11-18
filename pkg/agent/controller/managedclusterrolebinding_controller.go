@@ -115,12 +115,9 @@ func (r *ManagedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req
 		}
 	} else {
 		for _, ns := range managedCRB.RoleRef.Namespaces {
-			exist, err := utils.IsNamespaceExist(r.SpokeClient, ns)
+			_, err := utils.IsNamespaceExist(r.SpokeClient, ns)
 			if err != nil {
 				return reconcile.Result{}, err
-			}
-			if !exist {
-				continue
 			}
 
 			givenRolebinding := &rbac.RoleBinding{

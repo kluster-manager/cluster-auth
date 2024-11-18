@@ -146,7 +146,7 @@ func (r *AccountReconciler) createGatewayClusterRoleBindingForUser(ctx context.C
 
 	crb := rbac.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("ace.%s.proxy", acc.Spec.UID),
+			Name: fmt.Sprintf("%s.proxy", acc.Name),
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(acc, authenticationv1alpha1.GroupVersion.WithKind("Account")),
 			},
@@ -214,7 +214,7 @@ func (r *AccountReconciler) createImpersonateClusterRoleAndRoleBinding(ctx conte
 	}
 	crb := rbac.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("ace.%s.impersonate", acc.Spec.UID),
+			Name: fmt.Sprintf("%s.impersonate", acc.Name),
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(acc, authenticationv1alpha1.GroupVersion.WithKind("Account")),
 			},
@@ -225,10 +225,6 @@ func (r *AccountReconciler) createImpersonateClusterRoleAndRoleBinding(ctx conte
 			Kind:     "ClusterRole",
 			Name:     cr.Name,
 		},
-	}
-
-	if strings.Contains(acc.Spec.Username, common.ServiceAccountPrefix) {
-		crb.Name = fmt.Sprintf("ace.%s.impersonate", acc.Name)
 	}
 
 	_, err = cu.CreateOrPatch(context.Background(), r.Client, &crb, func(obj client.Object, createOp bool) client.Object {

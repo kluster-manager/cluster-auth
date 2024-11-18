@@ -24,7 +24,6 @@ import (
 	authorizationv1alpha1 "github.com/kluster-manager/cluster-auth/apis/authorization/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
-	kerr "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -59,9 +58,7 @@ func ExtractServiceAccountNameAndNamespace(s string) (name, namespace string, er
 func IsNamespaceExist(kc client.Client, name string) (bool, error) {
 	var ns corev1.Namespace
 	err := kc.Get(context.Background(), types.NamespacedName{Name: name}, &ns)
-	if err != nil && kerr.IsNotFound(err) {
-		return false, nil
-	} else if err != nil {
+	if err != nil {
 		return false, err
 	}
 	return true, nil
