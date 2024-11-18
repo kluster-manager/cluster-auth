@@ -180,12 +180,6 @@ func (r *AccountReconciler) createImpersonateClusterRoleAndRoleBinding(ctx conte
 	// impersonate clusterRole
 	rules := []rbac.PolicyRule{
 		{
-			APIGroups:     []string{""},
-			Resources:     []string{"users"},
-			Verbs:         []string{"impersonate"},
-			ResourceNames: []string{acc.Spec.Username},
-		},
-		{
 			APIGroups: []string{"authentication.k8s.io"},
 			Resources: []string{"userextras/ace.appscode.com/org-id"},
 			Verbs:     []string{"impersonate"},
@@ -198,12 +192,19 @@ func (r *AccountReconciler) createImpersonateClusterRoleAndRoleBinding(ctx conte
 			return err
 		}
 
-		rules[0] = rbac.PolicyRule{
+		rules = append(rules, rbac.PolicyRule{
 			APIGroups:     []string{""},
 			Resources:     []string{"serviceaccounts"},
 			Verbs:         []string{"impersonate"},
 			ResourceNames: []string{name},
-		}
+		})
+	} else {
+		rules = append(rules, rbac.PolicyRule{
+			APIGroups:     []string{""},
+			Resources:     []string{"users"},
+			Verbs:         []string{"impersonate"},
+			ResourceNames: []string{acc.Spec.Username},
+		})
 	}
 
 	cr := rbac.ClusterRole{
