@@ -5,7 +5,7 @@ go 1.22.0
 require (
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.71.2
 	github.com/spf13/cobra v1.8.0
-	go.bytebuilders.dev/license-verifier v0.14.3
+	go.bytebuilders.dev/license-verifier v0.14.4
 	gomodules.xyz/logs v0.0.7
 	gomodules.xyz/x v0.0.17
 	k8s.io/api v0.30.2
@@ -13,7 +13,7 @@ require (
 	k8s.io/client-go v0.30.2
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20240310230437-4693a0247e57
-	kmodules.xyz/client-go v0.30.43
+	kmodules.xyz/client-go v0.30.44
 	open-cluster-management.io/addon-framework v0.11.0
 	open-cluster-management.io/api v0.15.0
 	open-cluster-management.io/managed-serviceaccount v0.7.0
