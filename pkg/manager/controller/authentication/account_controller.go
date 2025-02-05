@@ -181,7 +181,7 @@ func (r *AccountReconciler) createImpersonateClusterRoleAndRoleBinding(ctx conte
 	rules := []rbac.PolicyRule{
 		{
 			APIGroups: []string{"authentication.k8s.io"},
-			Resources: []string{"userextras/ace.appscode.com/org-id"},
+			Resources: []string{"userextras/" + kmapi.AceOrgIDKey, "userextras/" + kmapi.ClientOrgKey},
 			Verbs:     []string{"impersonate"},
 		},
 	}
