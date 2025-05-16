@@ -18,10 +18,12 @@ package manager
 
 import (
 	"embed"
+	"slices"
 
 	"github.com/kluster-manager/cluster-auth/pkg/common"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	kmapi "kmodules.xyz/client-go/api/v1"
 	"open-cluster-management.io/addon-framework/pkg/addonfactory"
 	addonv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -60,6 +62,19 @@ func GetDefaultValues(registryFQDN string) addonfactory.GetValuesFunc {
 
 		if err = unstructured.SetNestedField(values, cluster.Name, "clusterName"); err != nil {
 			return nil, err
+		}
+
+		for _, cc := range cluster.Status.ClusterClaims {
+			if cc.Name == kmapi.ClusterClaimKeyInfo {
+				var info kmapi.ClusterInfo
+				if err := yaml.Unmarshal([]byte(cc.Value), &info); err != nil {
+					return nil, err
+				}
+				if slices.Contains(info.ClusterManagers, kmapi.ClusterManagerOpenShift.Name()) {
+					unstructured.RemoveNestedField(values, "image", "securityContext", "runAsUser")
+					unstructured.RemoveNestedField(values, "podSecurityContext", "fsGroup")
+				}
+			}
 		}
 
 		return values, nil
