@@ -22,6 +22,7 @@ import (
 	addonapiv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
 	clusterclientset "open-cluster-management.io/api/client/cluster/clientset/versioned"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
+	ylib "sigs.k8s.io/yaml"
 
 	"open-cluster-management.io/addon-framework/pkg/agent"
 )
@@ -108,6 +109,10 @@ func (a *HelmAgentAddon) renderManifests(
 	values, err := a.getValues(cluster, addon)
 	if err != nil {
 		return objects, err
+	}
+
+	if data, err := ylib.Marshal(values); err == nil {
+		fmt.Println("FINAL values:\n", string(data))
 	}
 
 	helmEngine := engine.Engine{
@@ -208,6 +213,11 @@ func (a *HelmAgentAddon) getValues(
 	if err != nil {
 		return nil, err
 	}
+
+	if data, err := ylib.Marshal(overrideValues); err == nil {
+		fmt.Println("Input values:\n", string(data))
+	}
+
 	values, err := chartutil.ToRenderValues(a.chart, overrideValues,
 		releaseOptions, a.capabilities(cluster, addon))
 	if err != nil {
