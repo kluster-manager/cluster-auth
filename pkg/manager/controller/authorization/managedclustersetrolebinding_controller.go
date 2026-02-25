@@ -60,7 +60,7 @@ func (r *ManagedClusterSetRoleBindingReconciler) Reconcile(ctx context.Context, 
 	logger.Info("Start reconciling")
 
 	managedCSRB := &authorizationv1alpha1.ManagedClusterSetRoleBinding{}
-	err := r.Client.Get(ctx, req.NamespacedName, managedCSRB)
+	err := r.Get(ctx, req.NamespacedName, managedCSRB)
 	if err != nil {
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
@@ -74,7 +74,7 @@ func (r *ManagedClusterSetRoleBindingReconciler) Reconcile(ctx context.Context, 
 			}
 			// Remove the finalizer
 			controllerutil.RemoveFinalizer(managedCSRB, common.HubAuthorizationFinalizer)
-			if err := r.Client.Update(context.TODO(), managedCSRB); err != nil {
+			if err := r.Update(context.TODO(), managedCSRB); err != nil {
 				return reconcile.Result{}, err
 			}
 		}
@@ -156,7 +156,7 @@ func (r *ManagedClusterSetRoleBindingReconciler) Reconcile(ctx context.Context, 
 func (r *ManagedClusterSetRoleBindingReconciler) addFinalizerIfNeeded(managedCSRB *authorizationv1alpha1.ManagedClusterSetRoleBinding) error {
 	if !controllerutil.ContainsFinalizer(managedCSRB, common.HubAuthorizationFinalizer) {
 		controllerutil.AddFinalizer(managedCSRB, common.HubAuthorizationFinalizer)
-		if err := r.Client.Update(context.TODO(), managedCSRB); err != nil {
+		if err := r.Update(context.TODO(), managedCSRB); err != nil {
 			return err
 		}
 	}
@@ -165,12 +165,12 @@ func (r *ManagedClusterSetRoleBindingReconciler) addFinalizerIfNeeded(managedCSR
 
 func (r *ManagedClusterSetRoleBindingReconciler) deleteAssociatedResources(managedCSRB *authorizationv1alpha1.ManagedClusterSetRoleBinding) error {
 	managedClusterRoleBindingList := authorizationv1alpha1.ManagedClusterRoleBindingList{}
-	err := r.Client.List(context.TODO(), &managedClusterRoleBindingList, client.MatchingLabelsSelector{
+	err := r.List(context.TODO(), &managedClusterRoleBindingList, client.MatchingLabelsSelector{
 		Selector: labels.SelectorFromSet(managedCSRB.Labels),
 	})
 	if err == nil {
 		for _, mcrb := range managedClusterRoleBindingList.Items {
-			if err := r.Client.Delete(context.TODO(), &mcrb); err != nil {
+			if err := r.Delete(context.TODO(), &mcrb); err != nil {
 				return err
 			}
 		}
@@ -187,7 +187,7 @@ func (r *ManagedClusterSetRoleBindingReconciler) mapManagedClusterSetToManagedCl
 	}
 
 	managedCSRBList := &authorizationv1alpha1.ManagedClusterSetRoleBindingList{}
-	err := r.Client.List(ctx, managedCSRBList)
+	err := r.List(ctx, managedCSRBList)
 	if err != nil {
 		logger.Error(err, "Failed to list ManagedClusterSetRoleBinding objects")
 		return nil

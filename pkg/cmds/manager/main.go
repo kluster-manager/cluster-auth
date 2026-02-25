@@ -42,6 +42,8 @@ import (
 	"open-cluster-management.io/addon-framework/pkg/agent"
 	"open-cluster-management.io/addon-framework/pkg/utils"
 	"open-cluster-management.io/api/addon/v1alpha1"
+	addonv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
+	addonv1beta1 "open-cluster-management.io/api/addon/v1beta1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	clusterv1beta2 "open-cluster-management.io/api/cluster/v1beta2"
 	workv1 "open-cluster-management.io/api/work/v1"
@@ -68,6 +70,8 @@ func init() {
 	utilruntime.Must(workv1.Install(scheme))
 	utilruntime.Must(managedsaapi.AddToScheme(scheme))
 	utilruntime.Must(monitoringv1.AddToScheme(scheme))
+	utilruntime.Must(addonv1alpha1.Install(scheme))
+	utilruntime.Must(addonv1beta1.Install(scheme))
 }
 
 func NewRegistrationOption(restConfig *rest.Config, kc client.Client, addonName, agentName string) *agent.RegistrationOption {
