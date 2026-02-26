@@ -41,7 +41,6 @@ import (
 	"open-cluster-management.io/addon-framework/pkg/addonmanager"
 	"open-cluster-management.io/addon-framework/pkg/agent"
 	"open-cluster-management.io/addon-framework/pkg/utils"
-	"open-cluster-management.io/api/addon/v1alpha1"
 	addonv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
 	addonv1beta1 "open-cluster-management.io/api/addon/v1beta1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -79,7 +78,7 @@ func NewRegistrationOption(restConfig *rest.Config, kc client.Client, addonName,
 		CSRConfigurations: agent.KubeClientSignerConfigurations(addonName, agentName),
 		CSRApproveCheck:   agent.ApprovalAllCSRs,
 		PermissionConfig:  permission.SetupPermission(restConfig, kc, agentName),
-		AgentInstallNamespace: func(addon *v1alpha1.ManagedClusterAddOn) (string, error) {
+		AgentInstallNamespace: func(addon *addonv1alpha1.ManagedClusterAddOn) (string, error) {
 			return common.AddonAgentInstallNamespace, nil
 		},
 	}
@@ -137,7 +136,7 @@ func NewCmdManager() *cobra.Command {
 				WithGetValuesFuncs(manager.GetDefaultValues(registryFQDN)).
 				WithAgentRegistrationOption(registrationOption).
 				WithAgentHealthProber(agentHealthProber()).
-				WithAgentInstallNamespace(func(addon *v1alpha1.ManagedClusterAddOn) (string, error) {
+				WithAgentInstallNamespace(func(addon *addonv1alpha1.ManagedClusterAddOn) (string, error) {
 					return common.AddonAgentInstallNamespace, nil
 				}).
 				BuildHelmAgentAddon()

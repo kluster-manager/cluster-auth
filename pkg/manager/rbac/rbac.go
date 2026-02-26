@@ -102,14 +102,13 @@ func SetupPermission(restConfig *rest.Config, kc client.Client, agentName string
 		}
 
 		for _, reg := range managedClusterAddon.Status.Registrations {
-			if reg.Type == "kubeClient" && reg.KubeClient.Driver == "csr" {
-				sub := []rbacv1.Subject{
+			if reg.Type == addonv1beta1.KubeClient && reg.KubeClient.Driver == "csr" {
+				roleBinding.Subjects = []rbacv1.Subject{
 					{
 						Kind: "User",
 						Name: agentUser,
 					},
 				}
-				roleBinding.Subjects = sub
 			}
 		}
 
