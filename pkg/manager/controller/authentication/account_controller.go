@@ -49,7 +49,7 @@ func (r *AccountReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	logger.Info("Start reconciling...")
 
 	acc := &authenticationv1alpha1.Account{}
-	err := r.Client.Get(ctx, req.NamespacedName, acc)
+	err := r.Get(ctx, req.NamespacedName, acc)
 	if err != nil {
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
@@ -288,7 +288,7 @@ func (r *AccountReconciler) updateConditions(conditions []kmapi.Condition, condi
 
 func (r *AccountReconciler) setStatusFailed(ctx context.Context, acc *authenticationv1alpha1.Account, err error) error {
 	// Re-fetch the latest version of the Account object
-	if err := r.Client.Get(ctx, client.ObjectKeyFromObject(acc), acc); err != nil && !errors.IsNotFound(err) {
+	if err := r.Get(ctx, client.ObjectKeyFromObject(acc), acc); err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("failed to get latest account object: %w", err)
 	}
 
@@ -304,7 +304,7 @@ func (r *AccountReconciler) setStatusFailed(ctx context.Context, acc *authentica
 
 func (r *AccountReconciler) setStatusSuccess(ctx context.Context, acc *authenticationv1alpha1.Account, message string) error {
 	// Re-fetch the latest version of the Account object
-	if err := r.Client.Get(ctx, client.ObjectKeyFromObject(acc), acc); err != nil && !errors.IsNotFound(err) {
+	if err := r.Get(ctx, client.ObjectKeyFromObject(acc), acc); err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("failed to get latest account object: %w", err)
 	}
 

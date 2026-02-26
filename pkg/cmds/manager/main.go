@@ -41,12 +41,14 @@ import (
 	"open-cluster-management.io/addon-framework/pkg/addonmanager"
 	"open-cluster-management.io/addon-framework/pkg/agent"
 	"open-cluster-management.io/addon-framework/pkg/utils"
-	"open-cluster-management.io/api/addon/v1alpha1"
+	addonv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
+	addonv1beta1 "open-cluster-management.io/api/addon/v1beta1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	clusterv1beta2 "open-cluster-management.io/api/cluster/v1beta2"
 	workv1 "open-cluster-management.io/api/work/v1"
 	managedsaapi "open-cluster-management.io/managed-serviceaccount/apis/authentication/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -67,14 +69,16 @@ func init() {
 	utilruntime.Must(workv1.Install(scheme))
 	utilruntime.Must(managedsaapi.AddToScheme(scheme))
 	utilruntime.Must(monitoringv1.AddToScheme(scheme))
+	utilruntime.Must(addonv1alpha1.Install(scheme))
+	utilruntime.Must(addonv1beta1.Install(scheme))
 }
 
-func NewRegistrationOption(kubeConfig *rest.Config, addonName, agentName string) *agent.RegistrationOption {
+func NewRegistrationOption(restConfig *rest.Config, kc client.Client, addonName, agentName string) *agent.RegistrationOption {
 	return &agent.RegistrationOption{
 		CSRConfigurations: agent.KubeClientSignerConfigurations(addonName, agentName),
 		CSRApproveCheck:   agent.ApprovalAllCSRs,
-		PermissionConfig:  permission.SetupPermission(kubeConfig, agentName),
-		AgentInstallNamespace: func(addon *v1alpha1.ManagedClusterAddOn) (string, error) {
+		PermissionConfig:  permission.SetupPermission(restConfig, kc, agentName),
+		AgentInstallNamespace: func(addon *addonv1alpha1.ManagedClusterAddOn) (string, error) {
 			return common.AddonAgentInstallNamespace, nil
 		},
 	}
@@ -125,14 +129,14 @@ func NewCmdManager() *cobra.Command {
 				os.Exit(1)
 			}
 
-			registrationOption := NewRegistrationOption(mgr.GetConfig(), common.AddonName, common.AgentName)
+			registrationOption := NewRegistrationOption(mgr.GetConfig(), mgr.GetClient(), common.AddonName, common.AgentName)
 			agentAddOn, err := addonfactory.NewAgentAddonFactory(common.AddonName, manager.FS, common.AgentManifestsDir).
 				WithScheme(scheme).
 				WithConfigGVRs(utils.AddOnDeploymentConfigGVR).
 				WithGetValuesFuncs(manager.GetDefaultValues(registryFQDN)).
 				WithAgentRegistrationOption(registrationOption).
 				WithAgentHealthProber(agentHealthProber()).
-				WithAgentInstallNamespace(func(addon *v1alpha1.ManagedClusterAddOn) (string, error) {
+				WithAgentInstallNamespace(func(addon *addonv1alpha1.ManagedClusterAddOn) (string, error) {
 					return common.AddonAgentInstallNamespace, nil
 				}).
 				BuildHelmAgentAddon()
